@@ -54,3 +54,34 @@ def test_execute_check_bounds_output_and_fails_closed(tmp_path):
     assert len(log.encode("utf-8")) <= 5 * 1024 * 1024 + 128
     assert "OUTPUT TRUNCATED" in log
     assert result.metadata["output_truncated"] is True
+
+
+def test_execute_check_timeout_kills_process_group_descendants(tmp_path):
+    import os
+    import time
+    import pytest
+
+    if os.name != "posix":
+        pytest.skip("Process-group termination contract is POSIX-specific")
+
+    child_marker = tmp_path / "child_survived.txt"
+    child_code = (
+        "import time; time.sleep(0.8); "
+        f"open({str(child_marker)!r}, 'w', encoding='utf-8').write('survived')"
+    )
+    parent_code = (
+        "import subprocess, sys, time; "
+        f"subprocess.Popen([sys.executable, '-c', {child_code!r}]); "
+        "time.sleep(5)"
+    )
+    result = execute_check(
+        "PROCESS_TREE_TIMEOUT_TEST",
+        [sys.executable, "-c", parent_code],
+        required=True,
+        inputs=[],
+        output_dir=tmp_path,
+        timeout=0.2,
+    )
+    time.sleep(1.0)
+    assert result.status == Status.INCONCLUSIVE
+    assert not child_marker.exists(), "A descendant survived the timed-out process group"
