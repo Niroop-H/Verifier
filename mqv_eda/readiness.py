@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterable, Mapping
+from typing import Iterable
 
 from .models import Status
 from .verification_catalog import get_verification_unit
@@ -19,6 +19,7 @@ class Readiness(str, Enum):
     BLOCKED = "BLOCKED"
     NOT_READY = "NOT READY"
     REVIEW_REQUIRED = "REVIEW REQUIRED"
+    EVIDENCE_COMPLETE = "EVIDENCE COMPLETE — SIGN-OFF STILL REQUIRED"
 
 
 @dataclass(frozen=True)
@@ -57,17 +58,17 @@ class ReadinessAssessment:
 
 
 def assess_readiness(
-    *, scope: str,
+    *,
+    scope: str,
     required_units: Iterable[str],
     evidence: Iterable[EvidenceRecord],
     require_human_review: bool = True,
 ) -> ReadinessAssessment:
-    """Assess only the supplied scope; no generic fabrication verdict is emitted.
+    """Assess only supplied evidence; never emit a fabrication-ready verdict.
 
-    Duplicate evidence for a required unit is treated as ambiguous and therefore
-    missing. A PASS requires an evidence URI and input digest. Human review is
-    independently required by default. This policy does not verify the truth of
-    external evidence or replace qualified sign-off.
+    Duplicate evidence for a required unit is ambiguous and treated as missing.
+    A PASS requires an evidence URI and input digest. Human review is independently
+    required by default. This policy does not authenticate evidence contents.
     """
     scope = scope.strip()
     if not scope:
@@ -110,7 +111,7 @@ def assess_readiness(
 
     notes = (
         "Assessment is limited to the declared scope and supplied evidence records.",
-        "Evidence URIs, hashes, tool versions and reviewer identities are not independently authenticated here.",
+        "Evidence contents, input digests, tool versions and reviewer identities are not independently authenticated here.",
         "This policy assessment is not foundry sign-off and never declares fabrication readiness.",
     )
     if failed:
@@ -122,6 +123,6 @@ def assess_readiness(
     elif unreviewed:
         readiness = Readiness.REVIEW_REQUIRED
     else:
-        readiness = Readiness.REVIEW_REQUIRED
+        readiness = Readiness.EVIDENCE_COMPLETE
     return ReadinessAssessment(readiness, scope, tuple(passed), tuple(failed), tuple(blocked),
                                tuple(missing), tuple(unreviewed), notes)
