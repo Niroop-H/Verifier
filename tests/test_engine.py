@@ -1,5 +1,7 @@
 from pathlib import Path
-from mqv_eda.engine import module_names, project_files, quote_yosys, looks_like_testbench
+import sys
+from mqv_eda.engine import execute_check, module_names, project_files, quote_yosys, looks_like_testbench
+from mqv_eda.models import Status
 
 def test_project_files_ignores_build_dirs(tmp_path):
     (tmp_path / "top.v").write_text("module top; endmodule\n")
@@ -22,3 +24,17 @@ def test_testbench_recognized():
     assert looks_like_testbench(Path("tb_top.sv"))
     assert looks_like_testbench(Path("core_tb.v"))
     assert not looks_like_testbench(Path("top.sv"))
+
+
+def test_execute_check_timeout_is_inconclusive_and_logs_timeout(tmp_path):
+    result = execute_check(
+        "TIMEOUT_TEST",
+        [sys.executable, "-c", "import time; time.sleep(5)"],
+        required=True,
+        inputs=[],
+        output_dir=tmp_path,
+        timeout=0.1,
+    )
+    assert result.status == Status.INCONCLUSIVE
+    assert "timed out" in result.message.lower()
+    assert "[TIMEOUT" in Path(result.log_path).read_text(encoding="utf-8")
