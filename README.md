@@ -4,7 +4,7 @@
 **Developer:** MAH Quantum  
 **Release status:** Engineering evaluation build  
 **Evidence commit:** `71bf98c1cc9b9843255ceb90390d6bf7d53f8780`  
-**CI evidence:** [Successful GitHub Actions run](https://github.com/Niroop-H/Verifier/actions/runs/39904891080)
+**Latest CI evidence:** [Successful three-job GitHub Actions run](https://github.com/Niroop-H/Verifier/actions/runs/39906280785)
 
 MAH Quantum Verify is an early-stage EDA verification orchestration platform. This evaluation release integrates selected open-source tools, runs repeatable sample checks, and packages evidence for engineering review. It is intended for technical evaluation using **non-sensitive sample designs**.
 
@@ -12,11 +12,14 @@ MAH Quantum Verify is an early-stage EDA verification orchestration platform. Th
 
 ## Session 2 — Security assurance foundation
 
-Security primitives and scope boundaries are documented in [Session 2 Security Assurance](docs/SESSION2_SECURITY_ASSURANCE.md). This increment adds path validation, deny-by-default role/action checks, best-effort secret redaction, JSONL audit events, and regression tests. These are building blocks only; they do not establish a secure deployment or defence/regulatory authorization.
+- [Security assurance foundation](docs/SESSION2_SECURITY_ASSURANCE.md): path validation, deny-by-default role/action checks, best-effort secret redaction and hash-chained audit events.
+- [Threat model and worker security contract](docs/SESSION2_THREAT_MODEL.md): assets, trust boundaries, attack scenarios, deployment controls and worker-isolation exit criteria.
+
+These controls are building blocks, not proof of a secure deployment or defence/regulatory authorization. The current local engine is not a sandbox for untrusted EDA workloads.
 
 ## Session 1 — CI results
 
-The cited CI run completed with all three jobs successful:
+The latest cited CI run completed with all three jobs successful:
 
 1. Python tests and source checks
 2. Real EDA toolchain regression
@@ -71,7 +74,7 @@ Commercial simulators, formal engines and emulation platforms require separate l
 ## Evaluation procedure
 
 1. Read [the technical evaluation report](docs/EVALUATION_REPORT.md).
-2. Inspect the [successful CI run](https://github.com/Niroop-H/Verifier/actions/runs/39904891080) and its artifacts.
+2. Inspect the [latest successful CI run](https://github.com/Niroop-H/Verifier/actions/runs/39906280785) and its artifacts.
 3. Re-run the included sample project in a clean Linux environment.
 4. Check both positive and negative test cases and inspect raw reports.
 5. Agree on separate customer-specific acceptance criteria before testing any customer design.
