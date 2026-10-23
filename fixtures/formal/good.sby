@@ -1,0 +1,13 @@
+[options]
+mode prove
+depth 5
+
+[engines]
+smtbmc z3
+
+[script]
+read -formal good.sv
+prep -top formal_good
+
+[files]
+good.sv

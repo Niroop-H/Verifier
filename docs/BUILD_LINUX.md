@@ -1,38 +1,41 @@
-# Linux build and validation guide
+# Linux build and test guide
 
-## Recommended baseline
-Use Ubuntu 24.04 x86-64. Build in a fresh VM/container; don't install tools on the desktop merely to run CI. This build uses distro packages first for repeatability, with source builds added only when an available distro package fails the version/capability gate.
+## Supported build runner
+The CI reference runner is Ubuntu 22.04 x86-64 because it provides a consistent baseline for this first open-source EDA suite. Package versions are captured in the job artifact. Use a container or VM for local reproduction.
 
-## Bootstrap
-```bash
-sudo apt-get update
-sudo apt-get install -y --no-install-recommends \
-  build-essential cmake ninja-build git curl ca-certificates pkg-config \
-  python3 python3-pip python3-venv python3-dev \
-  iverilog verilator yosys ghdl z3 boolector \
-  klayout opensta
-```
-Package names and versions can differ between Ubuntu releases. The workflow records actual tool versions and marks a check BLOCKED if the executable or required collateral is not present. Do not silently count BLOCKED as PASS.
+## Install core tools
+Run from a clean Ubuntu machine:
+    
+    sudo apt-get update
+    sudo apt-get install -y build-essential cmake git curl ca-certificates python3 python3-pip python3-venv \
+      iverilog verilator yosys ghdl z3 boolector klayout opensta
 
-## Python test environment
-```bash
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements-dev.txt
-pytest -q -rs
-```
+SymbiYosys (sby) is installed at an explicitly pinned upstream commit by CI:
+    
+    git clone https://github.com/YosysHQ/sby.git
+    cd sby
+    git checkout 79fc9eddca5e33a28cc2f2cd19c9825efd9a7255
+    sudo make install PREFIX=/usr/local
 
-## Tools supplied as source archives
-Icarus, Verilator, Yosys, GHDL, OpenSTA, SymbiYosys, Boolector and Z3 are independent projects. Source archives are not executable programs. Build each against the target OS/toolchain using that project's official instructions; pin a release or commit and record the exact revision. Don't use arbitrary `master` archives for a release build.
+Package availability varies by distribution. Always check the tool manifest after installation.
 
-## PDK setup
-Keep PDKs outside the application repository, e.g. under `/opt/pdks`. Set:
-- `MAHQV_TEST_IHP_PDK=/opt/pdks/IHP-Open-PDK`
-- `MAHQV_TEST_GF180_PDK=/opt/pdks/gf180mcu-pdk`
-- `MAHQV_TEST_SKY130_PDK=/opt/pdks/skywater-pdk`
+## Run project tests
+    python3 -m venv .venv
+    . .venv/bin/activate
+    python -m pip install -r requirements-dev.txt
+    python -m pytest -q -rs
+    bash scripts/run_regressions.sh
 
-Preserve the official repo's submodules and install steps; source ZIPs often omit submodule contents. Before enabling a PDK profile, verify its libraries, model files, layer map, DRC/LVS decks, and license/redistribution terms.
+## Run the local verification engine
+    python -m mqv_eda doctor
+    python -m mqv_eda verify fixtures/rtl/comb.v --top comb --out build/demo
 
-## Acceptance rule
-For each capability, preserve command, tool version, input hash, exit code, normalized result, raw log location, and any missing prerequisite. Run both known-good and known-bad fixtures. For formal verification distinguish bounded model checking from an unbounded proof. For STA, require an actual netlist, SDC, and compatible Liberty library. A PDK profile is not sign-off merely because its JSON exists.
+For a design with a testbench:
+    python -m mqv_eda verify path/to/project.zip --top my_top --testbench tb/tb_my_top.sv --sim-top tb_my_top --out build/my_run
+
+For STA provide a gate-level Verilog netlist, a Liberty timing library and SDC:
+    python -m mqv_eda verify project/ --top my_top --netlist build/netlist.v --liberty platform/cells.lib --sdc constraints.sdc
+
+For physical checks, supply an authorized deck and GDSII. The generic deck adapter uses input_file and report_file; only decks designed for this interface should be passed to it. Profile-specific decks may need a dedicated adapter.
+
+The engine runs local commands and emits JSON/HTML evidence. It does not upload design sources. Verify customer and foundry data-handling requirements before using any hosted CI worker.

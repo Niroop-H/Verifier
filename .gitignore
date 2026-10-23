@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+build/
+dist/
+mqv-report/
+artifacts/
+*.vvp
+ghdl-work/
+*.lyrdb

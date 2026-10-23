@@ -1,0 +1,13 @@
+[options]
+mode bmc
+depth 5
+
+[engines]
+smtbmc z3
+
+[script]
+read -formal bad.sv
+prep -top formal_bad
+
+[files]
+bad.sv

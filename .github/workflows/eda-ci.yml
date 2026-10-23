@@ -1,71 +1,102 @@
 name: EDA Session 1 CI
-
 on:
   push:
     branches: [main, "session1/**"]
   pull_request:
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
   python-validation:
-    name: Python and repository tests
+    name: Python tests and source checks
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
           cache: pip
           cache-dependency-path: requirements-dev.txt
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dev.txt
-      - name: Compile Python files
-        run: python -m compileall -q .
-      - name: Run regression tests
-        run: pytest -q -rs --junitxml=pytest-results.xml
-      - name: Upload test results
+      - name: Compile sources and run unit tests
+        run: |
+          python -m compileall -q mqv_eda tests
+          python -m pytest -q -rs --junitxml=unit-test-results.xml
+      - name: Upload unit test evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: session1-python-test-results
-          path: pytest-results.xml
+          name: session1-unit-test-evidence
+          path: unit-test-results.xml
           if-no-files-found: warn
-
-  open-source-eda-smoke:
-    name: Open-source EDA tools smoke tests
+  eda-toolchain-regression:
+    name: Real EDA toolchain regression
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - name: Install open-source EDA packages
+      - name: Install RTL, formal and physical tools build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends iverilog verilator yosys ghdl z3 boolector klayout opensta
-      - name: Capture tool manifest
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake git curl ca-certificates python3 python3-pip \
+            iverilog verilator yosys ghdl z3 boolector ruby tcl-dev swig bison flex \
+            automake autotools-dev libeigen3-dev libfmt-dev zlib1g-dev
+      - name: Install pinned KLayout 0.30.10
+        run: |
+          curl --fail --location --retry 3 \
+            https://www.klayout.org/downloads/Ubuntu-24/klayout_0.30.10-1_amd64.deb \
+            --output /tmp/klayout.deb
+          echo "674a26b464841ac7385dec3cc47c2c60  /tmp/klayout.deb" | md5sum --check -
+          sudo apt-get install -y /tmp/klayout.deb
+          klayout -v
+      - name: Build and install pinned CUDD for OpenSTA
+        run: |
+          git clone https://github.com/cuddorg/cudd.git "$RUNNER_TEMP/cudd"
+          git -C "$RUNNER_TEMP/cudd" checkout 3.0.0
+          cd "$RUNNER_TEMP/cudd"
+          ./configure --prefix=/usr/local
+          make -j2
+          sudo make install
+      - name: Build and install pinned OpenSTA
+        run: |
+          git clone https://github.com/parallaxsw/OpenSTA.git "$RUNNER_TEMP/OpenSTA"
+          git -C "$RUNNER_TEMP/OpenSTA" checkout bdc4e054cb917e1b7058444829191838b302cccd
+          cmake -S "$RUNNER_TEMP/OpenSTA" -B "$RUNNER_TEMP/OpenSTA/build" \
+            -DCMAKE_BUILD_TYPE=Release -DCUDD_DIR=/usr/local
+          cmake --build "$RUNNER_TEMP/OpenSTA/build" --parallel 2
+          sudo install -m 0755 "$RUNNER_TEMP/OpenSTA/build/sta" /usr/local/bin/sta
+      - name: Install pinned SymbiYosys
+        run: |
+          git clone https://github.com/YosysHQ/sby.git "$RUNNER_TEMP/sby"
+          git -C "$RUNNER_TEMP/sby" checkout 79fc9eddca5e33a28cc2f2cd19c9825efd9a7255
+          sudo make -C "$RUNNER_TEMP/sby" install PREFIX=/usr/local
+          sby --help >/dev/null
+      - name: Record tool versions
         run: |
           mkdir -p artifacts
-          {
-            echo "date_utc=$(date -u +%FT%TZ)"
-            for t in iverilog vvp verilator yosys ghdl z3 boolector klayout sta; do
-              if command -v "$t" >/dev/null 2>&1; then
-                echo "## $t"
-                timeout 10 "$t" --version 2>&1 | head -n 8 || true
-                command -v "$t"
-              else
-                echo "## $t: MISSING"
-              fi
-            done
-          } | tee artifacts/tool-manifest.txt
-      - name: Execute HDL smoke tests
+          python3 scripts/check_environment.py > artifacts/tool-environment.json
+          cat artifacts/tool-environment.json
+      - name: Run real EDA smoke regressions
         run: bash scripts/run_regressions.sh
-      - name: Upload tool evidence
+      - name: Run MAH Quantum Verify engine
+        run: |
+          python3 -m mqv_eda verify fixtures/projects/good --top comb \
+            --testbench tb_comb.v --sim-top tb_comb --out artifacts/engine-smoke
+          python3 - <<'PY'
+          import json
+          p = json.load(open("artifacts/engine-smoke/report.json", encoding="utf-8"))
+          assert p["overall_status"] == "PASS", p["overall_status"]
+          required = [x for x in p["checks"] if x["required"]]
+          assert required and all(x["status"] == "PASS" for x in required), required
+          PY
+      - name: Upload EDA evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: session1-eda-evidence
+          name: session1-eda-regression-evidence
           path: artifacts/
           if-no-files-found: warn

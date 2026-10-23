@@ -1,7 +1,8 @@
 # Open PDK integration policy
 
-- Keep PDKs out of the application repo and CI artifacts unless the PDK license expressly allows that distribution.
-- Never bundle customer/foundry collateral or secrets in a public repository.
-- An enabled profile must pin/identify the process release, libraries, layer map, DRC/LVS decks, model files where applicable, and required tool versions.
-- Public PDK presence does not imply foundry sign-off. Predictive PDKs such as ASAP7 are research platforms, not production foundry-qualified processes.
-- CI can use synthetic fixtures for generic checks. PDK-backed DRC/LVS tests run only when the exact PDK/deck is present and versioned; otherwise they report BLOCKED with the prerequisite.
+- PDKs live outside this public application repository and its normal CI artifacts unless the exact license expressly permits redistribution.
+- Never commit customer design data, credentials, restricted foundry collateral, or commercial tool binaries.
+- An enabled profile records process release, libraries, layer maps, DRC/LVS deck revisions, tool versions, required environment variables and license terms.
+- A predictive/academic PDK does not imply production foundry qualification.
+- A physical check must preserve the raw tool report and parser status. If a deck runs but does not produce a recognizable report, result is INCONCLUSIVE, not PASS.
+- Generic DRC/LVS command adapters are not interchangeable with every foundry's deck flow; deck-specific integration and regression fixtures are required.
