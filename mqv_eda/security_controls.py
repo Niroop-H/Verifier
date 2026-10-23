@@ -79,7 +79,7 @@ def verify_audit_log(path: Path) -> tuple[bool, int, str]:
                     continue
                 record = json.loads(line)
                 claimed = record.pop("event_sha256")
-                expected_previous = record.pop("previous_event_sha256", "")
+                expected_previous = record.get("previous_event_sha256", "")
                 if expected_previous != previous:
                     return False, count, f"Audit chain mismatch at line {line_no}."
                 canonical = json.dumps(record, sort_keys=True, separators=(",", ":"))
