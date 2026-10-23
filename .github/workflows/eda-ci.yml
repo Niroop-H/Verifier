@@ -56,37 +56,21 @@ jobs:
           test -x "$RUNNER_TEMP/oss-cad-suite/bin/iverilog"
           echo "$RUNNER_TEMP/oss-cad-suite/bin" >> "$GITHUB_PATH"
 
-      - name: Install OpenSTA from pinned Ubuntu source packages
-        timeout-minutes: 5
+      - name: Build OpenSTA from upstream source
         run: |
-          set -euxo pipefail
-          # Ubuntu 24.04 does not publish an opensta binary package on all runner images.
-          # Use the pinned source release tarball if upstream publishes one; do not silently
-          # fall back to an unverified binary or mark timing as available without sta -version.
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential cmake git curl tcl-dev swig bison flex \
-            automake autotools-dev libeigen3-dev libfmt-dev zlib1g-dev libfl-dev
-          mkdir -p "$RUNNER_TEMP/opensta-src"
-          git clone https://github.com/parallaxsw/OpenSTA.git "$RUNNER_TEMP/opensta-src"
-          git -C "$RUNNER_TEMP/opensta-src" fetch --depth 1 origin bdc4e054cb917e1b7058444829191838b302cccd
-          git -C "$RUNNER_TEMP/opensta-src" checkout --detach bdc4e054cb917e1b7058444829191838b302cccd
-          curl --fail --location --retry 3 \
-            https://raw.githubusercontent.com/davidkebo/cudd/main/cudd_versions/cudd-3.0.0.tar.gz \
-            --output "$RUNNER_TEMP/cudd-3.0.0.tar.gz"
+          sudo apt-get install -y --no-install-recommends             build-essential cmake git curl tcl-dev swig bison flex             automake autotools-dev libeigen3-dev libfmt-dev zlib1g-dev libfl-dev
+          mkdir -p "$RUNNER_TEMP/opensta"
+          curl --fail --location --retry 3             https://raw.githubusercontent.com/davidkebo/cudd/main/cudd_versions/cudd-3.0.0.tar.gz             --output "$RUNNER_TEMP/cudd-3.0.0.tar.gz"
           tar -xzf "$RUNNER_TEMP/cudd-3.0.0.tar.gz" -C "$RUNNER_TEMP"
           cd "$RUNNER_TEMP/cudd-3.0.0"
-          ./configure --prefix="$RUNNER_TEMP/cudd-install"
-          timeout 180 make --jobs 2
-          make install
-          cmake -S "$RUNNER_TEMP/opensta-src" -B "$RUNNER_TEMP/opensta-src/build" \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/opensta-install" \
-            -DCUDD_DIR="$RUNNER_TEMP/cudd-install" \
-            -DUSE_TCL_READLINE=OFF
-          timeout 360 cmake --build "$RUNNER_TEMP/opensta-src/build" --parallel 2
-          cmake --install "$RUNNER_TEMP/opensta-src/build"
-          sudo install -m 0755 "$RUNNER_TEMP/opensta-install/bin/sta" /usr/local/bin/sta
+          ./configure
+          make --jobs 2
+          git clone https://github.com/parallaxsw/OpenSTA.git "$RUNNER_TEMP/OpenSTA"
+          git -C "$RUNNER_TEMP/OpenSTA" checkout bdc4e054cb917e1b7058444829191838b302cccd
+          cmake -S "$RUNNER_TEMP/OpenSTA" -B "$RUNNER_TEMP/OpenSTA/build"             -DCMAKE_BUILD_TYPE=Release             -DCMAKE_INSTALL_PREFIX=/usr/local             -DCUDD_DIR="$RUNNER_TEMP/cudd-3.0.0"             -DUSE_TCL_READLINE=OFF
+          cmake --build "$RUNNER_TEMP/OpenSTA/build" --parallel 2
+          sudo cmake --install "$RUNNER_TEMP/OpenSTA/build"
           echo "/usr/local/bin" >> "$GITHUB_PATH"
           command -v sta
           sta -version
