@@ -32,6 +32,7 @@ This is a **deployment prototype**, not a claim that a complete hosted worker or
 - The output directory must be writable by the invoking non-root UID/GID. Treat all output as untrusted; validate and scan before exporting it.
 - Do not mount customer secrets, home directories, PDK license credentials, host sockets or unrelated files into the container.
 - The wrapper limits container memory to 4 GiB, CPU to 2 cores, PIDs to 128, file size to 1 GiB and `/tmp` to 1 GiB. Tune these values only through reviewed deployment changes and customer workload benchmarks.
+- On termination, the wrapper traps TERM/INT/HUP and attempts to remove its daemon-managed container. The engine sends TERM first, allows a bounded cleanup grace period, then sends KILL to the process group. A SIGKILL, host failure or Docker daemon failure can bypass shell cleanup; production deployments need an external worker supervisor/reaper and must verify that no container survives a cancelled job.
 - Container resource limits do not guarantee disk quota for the host output bind mount. Enforce a host filesystem/project quota for output and scratch storage.
 - `--network=none` blocks container network interfaces, but host-side DNS, metadata, shared filesystems, runtime vulnerabilities and side channels still require separate review.
 - Process termination, container escape resistance, cross-job isolation, output cleanup and quota behavior must be tested on the actual host. Never treat a wrapper script alone as a complete sandbox.
