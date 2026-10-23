@@ -13,6 +13,8 @@ MAH Quantum Verify is an early-stage EDA verification orchestration platform. Th
 ## End-to-end chip verification roadmap
 
 - [Semiconductor verification coverage matrix](docs/CHIP_VERIFICATION_COVERAGE_MATRIX.md): lifecycle coverage targets, required inputs/evidence, maturity boundaries, and readiness-gate requirements.
+- [Industrialization roadmap](docs/INDUSTRIALIZATION_ROADMAP.md): technical maturity gates, scaling/security/product requirements and commercial evidence needed before a valuation claim.
+- Evidence-gated readiness policy: `mqv_eda/readiness.py`; it treats missing/failed/blocked evidence conservatively and never emits a fabrication-ready verdict.
 - Machine-readable verification unit catalogue: `mqv_eda/verification_catalog.py` (RTL, simulation, formal, CDC/RDC, DFT, synthesis, power, STA, physical design, sign-off, reliability, security and post-silicon).
 
 The catalogue explicitly distinguishes implemented flows from planned integrations and external silicon evidence. A catalogue entry does not mean that MQV can already run that check.
