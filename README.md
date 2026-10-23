@@ -4,13 +4,15 @@
 **Developer:** MAH Quantum  
 **Release status:** Engineering evaluation build  
 **Evidence commit:** `71bf98c1cc9b9843255ceb90390d6bf7d53f8780`  
-**Latest CI evidence:** [Successful three-job GitHub Actions run](https://github.com/Niroop-H/Verifier/actions/runs/39906280785)
+**Latest CI evidence:** [Successful three-job GitHub Actions run](https://github.com/Niroop-H/Verifier/actions/runs/39909995640)
 
 MAH Quantum Verify is an early-stage EDA verification orchestration platform. This evaluation release integrates selected open-source tools, runs repeatable sample checks, and packages evidence for engineering review. It is intended for technical evaluation using **non-sensitive sample designs**.
 
 > **Scope boundary:** This is not a claim of universal chip verification, foundry sign-off, defence certification, or fabrication readiness.
 
 ## Session 2 — Security assurance foundation
+
+- [Session 2 completion status](docs/SESSION2_COMPLETION_STATUS.md): delivered controls, latest CI evidence, and the explicit production-readiness blockers.
 
 - [Security assurance foundation](docs/SESSION2_SECURITY_ASSURANCE.md): path validation, deny-by-default role/action checks, best-effort secret redaction and hash-chained audit events.
 - [Threat model and worker security contract](docs/SESSION2_THREAT_MODEL.md): assets, trust boundaries, attack scenarios, deployment controls and worker-isolation exit criteria.
