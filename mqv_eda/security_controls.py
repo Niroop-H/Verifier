@@ -12,21 +12,21 @@ import time
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
-_SECRET_ASSIGNMENT = re.compile(r"(?i)(token|api[_-]?key|password|passwd|secret|private[_-]?key)(\\s*[:=]\\s*)([^\\s,;]+)")
-_BEARER = re.compile(r"(?i)(bearer\\s+)[A-Za-z0-9._~+/-]+=*")
-_CONTROL = re.compile(r"[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]")
+_SECRET_ASSIGNMENT = re.compile(r"(?i)(token|api[_-]?key|password|passwd|secret|private[_-]?key)(\s*[:=]\s*)([^\s,;]+)")
+_BEARER = re.compile(r"(?i)(bearer\s+)[A-Za-z0-9._~+/-]+=*")
+_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 class SecurityPolicyError(ValueError):
     """Raised when a security policy check cannot safely permit an operation."""
 
 def redact_secrets(text: str) -> str:
     text = _SECRET_ASSIGNMENT.sub(lambda m: f"{m.group(1)}{m.group(2)}[REDACTED]", text)
-    return _BEARER.sub(r"\\1[REDACTED]", text)
+    return _BEARER.sub(r"\1[REDACTED]", text)
 
 def validate_relative_path(value: str) -> str:
     if not isinstance(value, str) or not value or _CONTROL.search(value):
         raise SecurityPolicyError("Path must be a non-empty string without control characters.")
-    normalized = value.replace("\\\\", "/")
+    normalized = value.replace("\\", "/")
     path = PurePosixPath(normalized)
     if path.is_absolute() or normalized.startswith("//") or re.match(r"^[A-Za-z]:", normalized):
         raise SecurityPolicyError("Absolute paths are not permitted.")
@@ -70,5 +70,5 @@ def append_audit_event(path: Path, *, actor: str, action: str, outcome: str,
     path.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
     with os.fdopen(fd, "a", encoding="utf-8") as handle:
-        handle.write(json.dumps(record, sort_keys=True) + "\\n")
+        handle.write(json.dumps(record, sort_keys=True) + "\n")
     return event_hash
