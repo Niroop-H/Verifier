@@ -53,8 +53,18 @@ def test_review_is_required_even_when_all_evidence_passes():
     assert result.unreviewed == ("RTL_LINT",)
 
 
+def test_complete_evidence_still_never_claims_fabrication_ready():
+    result = assess_readiness(scope="RTL lint gate", required_units=["RTL_LINT"], evidence=[
+        record("RTL_LINT", evidence_uri="artifact://lint", input_digest="sha256:abc", reviewed_by="qualified-reviewer")])
+    assert result.readiness == Readiness.EVIDENCE_COMPLETE
+    assert result.to_dict()["fabrication_ready"] is False
+    assert "SIGN-OFF STILL REQUIRED" in result.readiness.value
+
+
 def test_unknown_unit_and_empty_scope_are_rejected():
     with pytest.raises(ValueError):
         assess_readiness(scope="RTL", required_units=["MADE_UP"], evidence=[])
     with pytest.raises(ValueError):
         assess_readiness(scope="  ", required_units=["RTL_LINT"], evidence=[])
+    with pytest.raises(ValueError):
+        assess_readiness(scope="RTL", required_units=[], evidence=[])
