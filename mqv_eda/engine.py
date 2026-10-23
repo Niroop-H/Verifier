@@ -4,6 +4,7 @@ import re
 import shutil
 import signal
 import subprocess
+import threading
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -78,20 +79,41 @@ def execute_check(
     log_path = output_dir / (re.sub(r"[^A-Za-z0-9_.-]+", "_", stage) + ".log")
     version_info = next((probe_tool(s) for s in TOOL_SPECS if s.executable == exe), {})
     version = version_info.get("version")
-    proc: subprocess.Popen[str] | None = None
+    proc: subprocess.Popen[bytes] | None = None
     try:
-        # Start a separate process group on POSIX so timeout handling can stop
-        # descendants launched by EDA tools, not only the immediate parent.
+        # Keep subprocess output bounded in memory and on disk. Continue draining
+        # after the cap so a noisy tool cannot block forever on a full pipe.
+        max_output_bytes = 5 * 1024 * 1024
+        captured = bytearray()
+        output_truncated = False
+
         proc = subprocess.Popen(
             command, cwd=str(cwd) if cwd else None,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, errors="replace",
             env={**os.environ, "LC_ALL": "C", "TZ": "UTC"},
             start_new_session=(os.name == "posix"),
         )
+
+        def drain_output() -> None:
+            nonlocal output_truncated
+            assert proc is not None and proc.stdout is not None
+            while True:
+                chunk = proc.stdout.read(65536)
+                if not chunk:
+                    break
+                remaining = max_output_bytes - len(captured)
+                if remaining > 0:
+                    captured.extend(chunk[:remaining])
+                if len(chunk) > remaining:
+                    output_truncated = True
+
+        reader = threading.Thread(target=drain_output, name="mqv-output-drain", daemon=True)
+        reader.start()
+        timed_out = False
         try:
-            output, _ = proc.communicate(timeout=timeout)
+            proc.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
+            timed_out = True
             if os.name == "posix":
                 try:
                     os.killpg(proc.pid, signal.SIGKILL)
@@ -99,18 +121,41 @@ def execute_check(
                     pass
             else:
                 proc.kill()
-            output, _ = proc.communicate()
-            output = output or ""
-            log_path.write_text(output + "\n[TIMEOUT: process group terminated]\n",
-                                encoding="utf-8", errors="replace")
+            proc.wait()
+        if proc.stdout:
+            proc.stdout.close() if os.name != "posix" else None
+        reader.join(timeout=5)
+        if reader.is_alive():
+            # A descendant may have escaped the process group and retained the
+            # pipe. Do not block the controller indefinitely on the reader.
+            output_truncated = True
+        output = captured.decode("utf-8", "replace")
+        if output_truncated:
+            output += "\\n[OUTPUT TRUNCATED: 5 MiB capture limit]\\n"
+        if timed_out:
+            output += "\\n[TIMEOUT: process group termination requested]\\n"
+        log_path.write_text(output, encoding="utf-8", errors="replace")
+        if timed_out:
             return CheckResult(stage, Status.INCONCLUSIVE,
                                f"Command timed out after {timeout}s; process group termination was requested.",
                                required, command=command, tool_version=version, started_utc=started_utc,
                                duration_seconds=round(time.monotonic()-started, 4),
                                exit_code=proc.returncode, input_hashes=_hashes(inputs), log_path=str(log_path),
-                               metadata={"output_tail": output[-3000:]})
-        output = output or ""
-        log_path.write_text(output, encoding="utf-8", errors="replace")
+                               metadata={"output_tail": output[-3000:], "output_truncated": output_truncated})
+        if reader.is_alive():
+            return CheckResult(stage, Status.INCONCLUSIVE,
+                               "Output reader did not terminate; process descendants may still hold output open.",
+                               required, command=command, tool_version=version, started_utc=started_utc,
+                               duration_seconds=round(time.monotonic()-started, 4),
+                               exit_code=proc.returncode, input_hashes=_hashes(inputs), log_path=str(log_path),
+                               metadata={"output_tail": output[-3000:], "output_truncated": True})
+        if output_truncated and expected_parser:
+            return CheckResult(stage, Status.INCONCLUSIVE,
+                               "Tool output exceeded the capture limit; verdict parser was not given complete output.",
+                               required, command=command, tool_version=version, started_utc=started_utc,
+                               duration_seconds=round(time.monotonic()-started, 4),
+                               exit_code=proc.returncode, input_hashes=_hashes(inputs), log_path=str(log_path),
+                               metadata={"output_tail": output[-3000:], "output_truncated": True})
         if expected_parser:
             status, message = expected_parser(output, proc.returncode)
         elif proc.returncode == 0:
@@ -120,7 +165,7 @@ def execute_check(
         return CheckResult(stage, status, message, required, command=command, tool_version=version,
                            started_utc=started_utc, duration_seconds=round(time.monotonic()-started, 4),
                            exit_code=proc.returncode, input_hashes=_hashes(inputs), log_path=str(log_path),
-                           metadata={"output_tail": output[-3000:]})
+                           metadata={"output_tail": output[-3000:], "output_truncated": output_truncated})
     except OSError as exc:
         return CheckResult(stage, Status.ERROR, f"Could not execute tool: {exc}", required,
                            command=command, tool_version=version, started_utc=started_utc,
