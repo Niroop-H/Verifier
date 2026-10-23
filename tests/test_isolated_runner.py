@@ -61,6 +61,7 @@ def test_isolated_runner_applies_container_restrictions(tmp_path):
         "--ulimit=nofile=1024:1024",
     ):
         assert required in args
-    assert any(arg.startswith("--mount") and "dst=/input,readonly" in arg for arg in args)
-    assert any(arg.startswith("--mount") and "dst=/output" in arg for arg in args)
+    assert "--mount" in args
+    assert any("dst=/input,readonly" in arg for arg in args)
+    assert any("dst=/output" in arg for arg in args)
     assert "--user=0:0" not in args
