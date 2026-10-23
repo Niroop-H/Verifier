@@ -59,8 +59,10 @@ jobs:
           git -C "$RUNNER_TEMP/cudd" checkout 3.0.0
           cd "$RUNNER_TEMP/cudd"
           ./configure --prefix=/usr/local
-          make -j2
-          sudo make install
+          # This legacy release ships generated autotools files that otherwise
+          # attempt to regenerate with the unavailable aclocal-1.14 executable.
+          make -o aclocal.m4 -o Makefile.in -o configure -j2
+          sudo make -o aclocal.m4 -o Makefile.in -o configure install
       - name: Build and install pinned OpenSTA
         run: |
           git clone https://github.com/parallaxsw/OpenSTA.git "$RUNNER_TEMP/OpenSTA"

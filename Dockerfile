@@ -13,7 +13,9 @@ RUN curl --fail --location --retry 3 \
     && rm -f /tmp/klayout.deb && rm -rf /var/lib/apt/lists/*
 RUN git clone https://github.com/cuddorg/cudd.git /tmp/cudd \
     && git -C /tmp/cudd checkout 3.0.0 \
-    && cd /tmp/cudd && ./configure --prefix=/usr/local && make -j2 && make install \
+    && cd /tmp/cudd && ./configure --prefix=/usr/local \
+    && make -o aclocal.m4 -o Makefile.in -o configure -j2 \
+    && make -o aclocal.m4 -o Makefile.in -o configure install \
     && rm -rf /tmp/cudd
 RUN git clone https://github.com/parallaxsw/OpenSTA.git /tmp/OpenSTA \
     && git -C /tmp/OpenSTA checkout bdc4e054cb917e1b7058444829191838b302cccd \

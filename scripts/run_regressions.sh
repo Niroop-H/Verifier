@@ -62,7 +62,7 @@ expect_diagnostic iverilog_rejects_bad_rtl "missing_signal|Unable to bind|error"
 run_ok yosys_synthesis_good yosys -p "read_verilog -sv $GOOD; hierarchy -check -top comb; proc; opt; check; stat"
 expect_diagnostic yosys_rejects_bad_rtl "missing_signal|implicitly declared|ERROR" yosys -p "read_verilog -sv $BAD; hierarchy -check -top bad; proc; opt; check"
 run_ok ghdl_analyze_good ghdl -a --std=08 --workdir=artifacts fixtures/vhdl/good.vhd
-expect_diagnostic ghdl_rejects_bad_vhdl "error|missing|unexpected" ghdl -a --std=08 --workdir=artifacts fixtures/vhdl/bad.vhd
+expect_diagnostic ghdl_rejects_bad_vhdl "error|expected|unexpected" ghdl -a --std=08 --workdir=artifacts fixtures/vhdl/bad.vhd
 mkdir -p artifacts/formal
 cp fixtures/formal/* artifacts/formal/
 (cd artifacts/formal && sby -f good.sby > formal-good.log 2>&1)
