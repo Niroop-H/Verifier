@@ -97,15 +97,20 @@ def execute_check(
         def drain_output() -> None:
             nonlocal output_truncated
             assert proc is not None and proc.stdout is not None
-            while True:
-                chunk = proc.stdout.read(65536)
-                if not chunk:
-                    break
-                remaining = max_output_bytes - len(captured)
-                if remaining > 0:
-                    captured.extend(chunk[:remaining])
-                if len(chunk) > remaining:
-                    output_truncated = True
+            try:
+                while True:
+                    chunk = proc.stdout.read(65536)
+                    if not chunk:
+                        break
+                    remaining = max_output_bytes - len(captured)
+                    if remaining > 0:
+                        captured.extend(chunk[:remaining])
+                    if len(chunk) > remaining:
+                        output_truncated = True
+            except (OSError, ValueError):
+                # The controller may close the pipe after its bounded join.
+                # In that case, incomplete output is never trusted as a PASS.
+                output_truncated = True
 
         reader = threading.Thread(target=drain_output, name="mqv-output-drain", daemon=True)
         reader.start()
@@ -122,14 +127,18 @@ def execute_check(
             else:
                 proc.kill()
             proc.wait()
-        if proc.stdout:
-            proc.stdout.close() if os.name != "posix" else None
+        if proc.stdout and os.name != "posix":
+            proc.stdout.close()
         reader.join(timeout=5)
-        if reader.is_alive():
+        reader_stuck = reader.is_alive()
+        if reader_stuck:
             # A descendant may have escaped the process group and retained the
-            # pipe. Do not block the controller indefinitely on the reader.
+            # pipe. Do not block the controller indefinitely or race the reader
+            # while decoding the shared capture buffer.
             output_truncated = True
-        output = captured.decode("utf-8", "replace")
+            output = "[OUTPUT READER DID NOT TERMINATE; captured output withheld]\\n"
+        else:
+            output = captured.decode("utf-8", "replace")
         if output_truncated:
             output += "\\n[OUTPUT TRUNCATED: 5 MiB capture limit]\\n"
         if timed_out:
