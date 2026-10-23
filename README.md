@@ -10,6 +10,10 @@ MAH Quantum Verify is an early-stage EDA verification orchestration platform. Th
 
 > **Scope boundary:** This is not a claim of universal chip verification, foundry sign-off, defence certification, or fabrication readiness.
 
+## Session 2 — Security assurance foundation
+
+Security primitives and scope boundaries are documented in [Session 2 Security Assurance](docs/SESSION2_SECURITY_ASSURANCE.md). This increment adds path validation, deny-by-default role/action checks, best-effort secret redaction, JSONL audit events, and regression tests. These are building blocks only; they do not establish a secure deployment or defence/regulatory authorization.
+
 ## Session 1 — CI results
 
 The cited CI run completed with all three jobs successful:
