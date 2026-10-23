@@ -38,3 +38,19 @@ def test_execute_check_timeout_is_inconclusive_and_logs_timeout(tmp_path):
     assert result.status == Status.INCONCLUSIVE
     assert "timed out" in result.message.lower()
     assert "[TIMEOUT" in Path(result.log_path).read_text(encoding="utf-8")
+
+
+def test_execute_check_bounds_output_and_fails_closed(tmp_path):
+    result = execute_check(
+        "OUTPUT_LIMIT_TEST",
+        [sys.executable, "-c", "import sys; sys.stdout.write('x' * (6 * 1024 * 1024))"],
+        required=True,
+        inputs=[],
+        output_dir=tmp_path,
+        timeout=10,
+    )
+    log = Path(result.log_path).read_text(encoding="utf-8")
+    assert result.status == Status.INCONCLUSIVE
+    assert len(log.encode("utf-8")) <= 5 * 1024 * 1024 + 128
+    assert "OUTPUT TRUNCATED" in log
+    assert result.metadata["output_truncated"] is True
