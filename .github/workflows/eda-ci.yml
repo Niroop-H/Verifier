@@ -42,15 +42,10 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
-      - name: Install OpenSTA build dependencies
+      - name: Install minimal network/build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential cmake git curl ca-certificates \
-            python3-dev python3-pip python3-venv \
-            flex bison swig tcl-dev zlib1g-dev libfl-dev \
-            automake autotools-dev libeigen3-dev libfmt-dev
-
+          sudo apt-get install -y --no-install-recommends curl ca-certificates python3 python3-pip git
       - name: Install pinned OSS CAD Suite (official SHA-256 verified release)
         run: |
           curl --fail --location --retry 3 \
@@ -68,29 +63,6 @@ jobs:
             --output /tmp/klayout_0.30.10-1_amd64.deb
           echo "674a26b464841ac7385dec3cc47c2c60  /tmp/klayout_0.30.10-1_amd64.deb" | md5sum --check -
           sudo apt-get install -y /tmp/klayout_0.30.10-1_amd64.deb
-
-      - name: Build pinned CUDD dependency from official release tarball
-        run: |
-          curl --fail --location --retry 3 \
-            https://raw.githubusercontent.com/davidkebo/cudd/main/cudd_versions/cudd-3.0.0.tar.gz \
-            --output "$RUNNER_TEMP/cudd-3.0.0.tar.gz"
-          tar -xzf "$RUNNER_TEMP/cudd-3.0.0.tar.gz" -C "$RUNNER_TEMP"
-          cd "$RUNNER_TEMP/cudd-3.0.0"
-          ./configure
-          make --jobs 2
-
-      - name: Build pinned OpenSTA from source
-        run: |
-          git clone https://github.com/parallaxsw/OpenSTA.git "$RUNNER_TEMP/OpenSTA"
-          git -C "$RUNNER_TEMP/OpenSTA" checkout bdc4e054cb917e1b7058444829191838b302cccd
-          cmake -S "$RUNNER_TEMP/OpenSTA" -B "$RUNNER_TEMP/OpenSTA/build" \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX=/usr/local \
-            -DCUDD_DIR="$RUNNER_TEMP/cudd-3.0.0" \
-            -DUSE_TCL_READLINE=OFF
-          cmake --build "$RUNNER_TEMP/OpenSTA/build" --parallel 2
-          sudo cmake --install "$RUNNER_TEMP/OpenSTA/build"
-          echo "/usr/local/bin" >> "$GITHUB_PATH"
 
       - name: Record tool versions
         run: |
