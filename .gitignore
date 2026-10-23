@@ -1,0 +1,15 @@
+__pycache__/
+.pytest_cache/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+work/
+reports/
+*.vcd
+*.fst
+*.vvp
+*.gds
+*.lyrdb
+*.log
