@@ -7,13 +7,13 @@ Add testable, fail-closed security primitives while preserving the Session 1 EDA
 - Path validation rejects absolute, drive-qualified, traversal and control-character paths; resolved workspace targets are checked against the root.
 - Explicit role/action allow-list denies unknown roles and actions by default.
 - Best-effort redaction covers common inline token/API-key/password/secret assignments and bearer-token strings.
-- Append-only JSONL audit helper records actor, action, outcome, resource ID, timestamp and event SHA-256; new files request owner-only permissions on POSIX systems.
+- Append-only JSONL audit helper records actor, action, outcome, resource ID, timestamp and a SHA-256 hash chain. Verification detects modified/reordered events and appending refuses an invalid existing chain; new files request owner-only permissions on POSIX systems.
 - Regression tests cover traversal, symlink escape, authorization defaults, redaction and audit output/permissions.
 
 ## Deployment boundaries
 These helpers are not a complete security boundary. They do not provide authentication, MFA, tenant isolation, process/container sandboxing, network egress control, immutable/WORM audit storage, key management, encryption, rate limiting, CSRF protection, signed releases, SBOMs, vulnerability scanning or incident response.
 
-The path resolver cannot by itself eliminate time-of-check/time-of-use races. Use private per-job workspaces, restrictive OS permissions, no untrusted shared writable parents, and OS/container isolation. Authorization must be enforced by trusted server-side code, never only by the UI. Audit records need trusted identity, access controls, retention, tamper-evident external storage and monitoring in production.
+The path resolver cannot by itself eliminate time-of-check/time-of-use races. Use private per-job workspaces, restrictive OS permissions, no untrusted shared writable parents, and OS/container isolation. Authorization must be enforced by trusted server-side code, never only by the UI. A local hash chain detects many edits but cannot prevent privileged deletion, truncation, replacement, or rollback of the entire file. Audit records need trusted identity, access controls, retention, remote tamper-resistant storage and monitoring in production.
 
 Secret redaction is best-effort, not a guarantee that arbitrary secrets or sensitive RTL cannot appear in logs. Do not put credentials in command-line arguments, source files, public issues or sample fixtures. Treat RTL, netlists, constraints, PDK files and reports as potentially customer-confidential.
 
