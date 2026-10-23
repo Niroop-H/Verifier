@@ -151,13 +151,27 @@ jobs:
           test -f "$RUNNER_TEMP/IHP-Open-PDK/ihp-sg13g2/libs.tech/klayout/tech/drc/testing/testcases/unit_golden/activ_golden.gds"
       - name: Run official IHP DRC golden regression for activ table
         run: |
-          set -o pipefail
+          set +e
           PDK="$RUNNER_TEMP/IHP-Open-PDK"
           TEST_DIR="$PDK/ihp-sg13g2/libs.tech/klayout/tech/drc/testing"
           python "$TEST_DIR/run_regression.py" \
             --table_name=activ \
-            --run_dir="artifacts/ihp-drc-activ" \
-            --mp=2 2>&1 | tee "artifacts/ihp-drc-activ.log"
+            --run_dir="$RUNNER_TEMP/ihp-drc-activ" \
+            --mp=2 2>&1 | tee "$RUNNER_TEMP/ihp-drc-activ.log"
+          rc=${PIPESTATUS[0]}
+          mkdir -p artifacts/ihp-drc-activ
+          cp -R "$RUNNER_TEMP/ihp-drc-activ/." artifacts/ihp-drc-activ/ 2>/dev/null || true
+          cp "$RUNNER_TEMP/ihp-drc-activ.log" artifacts/ihp-drc-activ.log 2>/dev/null || true
+          # The upstream runner may return 1 for a golden layout that intentionally
+          # triggers expected DRC markers. Its own differential golden-table verdict
+          # is authoritative only when it explicitly reports all testcases passed.
+          if grep -q "# All testcases passed." "$RUNNER_TEMP/ihp-drc-activ.log" && \
+             grep -q "Test completed successfully." "$RUNNER_TEMP/ihp-drc-activ.log"; then
+            echo "IHP golden comparison passed: no unexpected/golden-missing violations."
+            exit 0
+          fi
+          echo "IHP golden comparison failed or produced no explicit success summary (runner exit=$rc)."
+          exit 1
       - name: Upload IHP DRC regression evidence
         if: always()
         uses: actions/upload-artifact@v4
