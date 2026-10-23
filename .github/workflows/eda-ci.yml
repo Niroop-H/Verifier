@@ -1,0 +1,71 @@
+name: EDA Session 1 CI
+
+on:
+  push:
+    branches: [main, "session1/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python-validation:
+    name: Python and repository tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+      - name: Compile Python files
+        run: python -m compileall -q .
+      - name: Run regression tests
+        run: pytest -q -rs --junitxml=pytest-results.xml
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: session1-python-test-results
+          path: pytest-results.xml
+          if-no-files-found: warn
+
+  open-source-eda-smoke:
+    name: Open-source EDA tools smoke tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install open-source EDA packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends iverilog verilator yosys ghdl z3 boolector klayout opensta
+      - name: Capture tool manifest
+        run: |
+          mkdir -p artifacts
+          {
+            echo "date_utc=$(date -u +%FT%TZ)"
+            for t in iverilog vvp verilator yosys ghdl z3 boolector klayout sta; do
+              if command -v "$t" >/dev/null 2>&1; then
+                echo "## $t"
+                timeout 10 "$t" --version 2>&1 | head -n 8 || true
+                command -v "$t"
+              else
+                echo "## $t: MISSING"
+              fi
+            done
+          } | tee artifacts/tool-manifest.txt
+      - name: Execute HDL smoke tests
+        run: bash scripts/run_regressions.sh
+      - name: Upload tool evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: session1-eda-evidence
+          path: artifacts/
+          if-no-files-found: warn
