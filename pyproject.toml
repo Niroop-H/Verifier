@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mahqv-eda"
+version = "0.1.0"
+description = "MAH Quantum Verify Session 1 EDA execution core"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary orchestration code; external tools retain their own licenses" }
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=8,<9"]
+
+[project.scripts]
+mqv-eda = "mahqv_eda.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
