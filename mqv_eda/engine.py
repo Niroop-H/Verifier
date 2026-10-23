@@ -149,9 +149,9 @@ def execute_check(
                                duration_seconds=round(time.monotonic()-started, 4),
                                exit_code=proc.returncode, input_hashes=_hashes(inputs), log_path=str(log_path),
                                metadata={"output_tail": output[-3000:], "output_truncated": True})
-        if output_truncated and expected_parser:
+        if output_truncated:
             return CheckResult(stage, Status.INCONCLUSIVE,
-                               "Tool output exceeded the capture limit; verdict parser was not given complete output.",
+                               "Tool output exceeded the capture limit; complete output was not retained.",
                                required, command=command, tool_version=version, started_utc=started_utc,
                                duration_seconds=round(time.monotonic()-started, 4),
                                exit_code=proc.returncode, input_hashes=_hashes(inputs), log_path=str(log_path),
