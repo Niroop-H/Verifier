@@ -49,7 +49,7 @@ A production worker must not be considered ready until all of the following are 
 - Disposable per-job VM or hardened container with a non-root identity, read-only base filesystem, and narrowly scoped writable job and scratch directories.
 - No privileged mode, host PID/network namespaces, host Docker socket, host home directory, SSH agent, cloud metadata access, or inherited service credentials.
 - Default-deny network egress and no runtime dependency downloads during customer jobs.
-- CPU, memory, process-count, file-size, disk, and log-output limits. POSIX timeout handling now attempts to terminate the process group and is covered by a timeout regression test; production still needs OS-level resource quotas, bounded output capture, and verification that descendants cannot escape the worker boundary.
+- CPU, memory, process-count, file-size, disk, and log-output limits. POSIX timeout handling now attempts to terminate the process group, and subprocess output capture is capped at 5 MiB; both behaviors have regression tests. These application-level controls do not replace OS-level resource quotas or verification that descendants cannot escape the worker boundary.
 - Allowlisted tool entry points and structured argument arrays; no shell interpolation of user-controlled strings.
 - Private artifact namespace per job; validated output paths; controlled export of only approved evidence.
 - Immutable worker image reference, pinned tool versions, image/dependency provenance, patch process, and vulnerability response procedure.
