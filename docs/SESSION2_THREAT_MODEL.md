@@ -35,7 +35,7 @@ The current repository is public and the local engine is an evaluation tool. Do 
 | Malicious RTL, testbench, SBY task, Tcl/Python/Ruby deck | Run untrusted jobs in a disposable isolated worker with no host secrets, restricted syscalls/capabilities and strict resource limits | The local engine launches tools as subprocesses; this alone is not a sandbox |
 | Cross-job or cross-tenant file access | Unique OS identity or equivalent isolation per job; private workspace and artifact namespace; no shared writable directories | Not established by the helper library |
 | Network exfiltration or remote payload retrieval | Deny worker network egress by default; allow only explicitly required, controlled endpoints during image/build preparation | Not enforced by current local engine |
-| Fork bomb, runaway tool, huge output or disk exhaustion | CPU, memory, process-count, wall-time, output-size, file-size and disk quotas; kill the entire process tree on timeout | Existing timeout is not equivalent to full process-tree or resource isolation |
+| Fork bomb, runaway tool, huge output or disk exhaustion | CPU, memory, process-count, wall-time, output-size, file-size and disk quotas; kill the entire process tree on timeout | POSIX timeout handling now starts a new process session and kills its process group; this is regression-tested, but output/resource quotas and a hostile-worker sandbox remain unimplemented |
 | Credential leakage in logs or command lines | Do not place secrets in argv; use scoped short-lived credentials; redact logs; test known and unknown leakage paths | Best-effort common-pattern redaction exists; it is not a guarantee |
 | Audit tampering or rollback | Remote append-only/WORM storage, independent permissions, monitoring and retention policy | Local SHA-256 event chain detects some changes but cannot prevent whole-log replacement |
 | Unauthorized operation or privilege escalation | Authenticate users; enforce server-side tenant/role/action policy; least-privileged service accounts; review admin paths | Role/action helper is an authorization primitive, not authentication or tenant isolation |
@@ -49,7 +49,7 @@ A production worker must not be considered ready until all of the following are 
 - Disposable per-job VM or hardened container with a non-root identity, read-only base filesystem, and narrowly scoped writable job and scratch directories.
 - No privileged mode, host PID/network namespaces, host Docker socket, host home directory, SSH agent, cloud metadata access, or inherited service credentials.
 - Default-deny network egress and no runtime dependency downloads during customer jobs.
-- CPU, memory, process-count, wall-clock, file-size, disk, and log-output limits. Timeout handling must terminate the entire process tree and report a bounded diagnostic.
+- CPU, memory, process-count, file-size, disk, and log-output limits. POSIX timeout handling now attempts to terminate the process group and is covered by a timeout regression test; production still needs OS-level resource quotas, bounded output capture, and verification that descendants cannot escape the worker boundary.
 - Allowlisted tool entry points and structured argument arrays; no shell interpolation of user-controlled strings.
 - Private artifact namespace per job; validated output paths; controlled export of only approved evidence.
 - Immutable worker image reference, pinned tool versions, image/dependency provenance, patch process, and vulnerability response procedure.
