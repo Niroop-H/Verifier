@@ -29,6 +29,12 @@ command -v docker >/dev/null 2>&1 || {
 mkdir -p -- "$output_dir"
 input_dir="$(cd -- "$input_dir" && pwd -P)"
 output_dir="$(cd -- "$output_dir" && pwd -P)"
+worker_uid="$(id -u)"
+worker_gid="$(id -g)"
+if [[ "$worker_uid" -eq 0 ]]; then
+  echo "ERROR: run this wrapper as a non-root host user." >&2
+  exit 4
+fi
 
 # The image must already be present locally. Never pull an image as part of
 # handling a customer job; image acquisition and signature/provenance checks
@@ -42,7 +48,7 @@ exec docker run --rm \
   --pull=never \
   --network=none \
   --read-only \
-  --user=65532:65532 \
+  --user="$worker_uid:$worker_gid" \
   --cap-drop=ALL \
   --security-opt=no-new-privileges:true \
   --pids-limit=128 \
