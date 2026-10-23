@@ -44,7 +44,37 @@ if ! docker image inspect "$image" >/dev/null 2>&1; then
   exit 3
 fi
 
-exec docker run --rm \
+umask 077
+cidfile="${TMPDIR:-/tmp}/mqv-worker-${BASHPID}.cid"
+if [[ -e "$cidfile" ]]; then
+  echo "ERROR: refusing to reuse an existing container ID file." >&2
+  exit 5
+fi
+docker_pid=""
+
+cleanup() {
+  if [[ -s "$cidfile" ]]; then
+    local container_id
+    container_id="$(cat -- "$cidfile" 2>/dev/null || true)"
+    if [[ "$container_id" =~ ^[0-9a-f]{64}$ ]]; then
+      docker rm -f "$container_id" >/dev/null 2>&1 || true
+    fi
+  fi
+  rm -f -- "$cidfile"
+}
+on_signal() {
+  cleanup
+  if [[ -n "$docker_pid" ]]; then
+    kill -TERM "$docker_pid" 2>/dev/null || true
+    wait "$docker_pid" 2>/dev/null || true
+  fi
+  exit 143
+}
+trap cleanup EXIT
+trap on_signal TERM INT HUP
+
+docker run --rm \
+  --cidfile="$cidfile" \
   --pull=never \
   --network=none \
   --read-only \
@@ -61,4 +91,6 @@ exec docker run --rm \
   --mount "type=bind,src=$input_dir,dst=/input,readonly" \
   --mount "type=bind,src=$output_dir,dst=/output" \
   --workdir=/output \
-  "$image" "$@"
+  "$image" "$@" &
+docker_pid=$!
+wait "$docker_pid"
