@@ -1,36 +1,75 @@
-# MAH Quantum Verify — Session 1: EDA Verification
+# MAH Quantum Verify
+## Engineering Evaluation Release — Session 1: EDA Verification
 
-This repository is the current Session 1 engineering workspace. It provides a local Python execution core, a reproducible Linux EDA toolchain in GitHub Actions, regression fixtures, PDK readiness inspection, tool integration status, and structured evidence reports.
+**Developer:** MAH Quantum  
+**Release status:** Engineering evaluation build  
+**Evidence commit:** `71bf98c1cc9b9843255ceb90390d6bf7d53f8780`  
+**CI evidence:** [Successful GitHub Actions run](https://github.com/Niroop-H/Verifier/actions/runs/39904891080)
+
+MAH Quantum Verify is an early-stage EDA verification orchestration platform. This evaluation release integrates selected open-source tools, runs repeatable sample checks, and packages evidence for engineering review. It is intended for technical evaluation using **non-sensitive sample designs**.
+
+> **Scope boundary:** This is not a claim of universal chip verification, foundry sign-off, defence certification, or fabrication readiness.
+
+## Session 1 — CI results
+
+The cited CI run completed with all three jobs successful:
+
+1. Python tests and source checks
+2. Real EDA toolchain regression
+3. Official IHP SG13G2 DRC golden regression
+
+The suite exercises selected RTL lint, Verilog simulation, synthesis, VHDL analysis, formal proof/counterexample, static timing and DRC fixtures. Review the [technical evaluation report](docs/EVALUATION_REPORT.md), [acceptance criteria](docs/SESSION1_ACCEPTANCE.md), [tool integration matrix](docs/TOOL_INTEGRATION_MATRIX.md), [open PDK notes](docs/OPEN_PDK_SUPPORT.md), and [toolchain provenance](docs/TOOLCHAIN_PROVENANCE.md).
 
 ## Quick start
 
-    python3 -m pip install -r requirements-dev.txt
-    python -m mqv_eda doctor
-    python -m mqv_eda tool-catalog
-    python -m mqv_eda pdks
-    python -m mqv_eda verify fixtures/projects/good --top comb --testbench tb_comb.v --sim-top tb_comb --out build/demo
+On Linux with Python 3:
 
-## Implemented execution adapters
+```bash
+python3 -m pip install -r requirements-dev.txt
+python -m mqv_eda doctor
+python -m mqv_eda tool-catalog
+python -m mqv_eda pdks
+python -m mqv_eda verify fixtures/projects/good --top comb --testbench tb_comb.v --sim-top tb_comb --out build/demo
+```
 
-- Safe ZIP extraction with traversal, symlink, special-file, size, entry-count and compression-ratio controls.
-- Runtime tool discovery including Icarus/VVP, Verilator, Yosys, GHDL, SymbiYosys, Z3, Boolector, KLayout, OpenSTA and optional ecosystem tools.
-- RTL lint, compile, testbench compile/run, Yosys synthesis and structural checks.
-- User-supplied SymbiYosys tasks with explicit formal verdicts.
-- VHDL analysis.
-- OpenSTA timing via a real gate-level netlist, Liberty library and SDC inputs.
-- KLayout deck adapter with an explicit report-file contract, generic positive/negative DRC smoke fixture, and separate official IHP SG13G2 Activ-table golden regression in CI.
-- Fail-closed statuses: PASS, FAIL, BLOCKED, INCONCLUSIVE, NOT RUN, ERROR.
-- SHA-256 input inventory, tool versions, raw logs, JSON and HTML evidence reports.
-- Local PDK collateral inspection and integration-state catalog.
+EDA executables must be installed and available on PATH for their corresponding flows. See [Linux build instructions](docs/BUILD_LINUX.md) and `python -m mqv_eda --help` for current options.
 
-## PDK and tool status
+## Current implementation areas
 
-The PDK catalogue includes SKY130, SKY130 HD, GF180MCU, IHP SG13G2, ASAP7, Nangate45 test-platform files and the generic OpenROAD backend. A source repo or PDK profile does not equal validated DRC/LVS. See docs/OPEN_PDK_SUPPORT.md.
+- Controlled ZIP extraction with traversal and archive-size protections.
+- Runtime tool discovery and a catalogue of EDA tools.
+- RTL lint, testbench compilation/execution, synthesis and structural checks.
+- User-supplied SymbiYosys formal tasks and VHDL analysis.
+- OpenSTA timing when a gate-level netlist, Liberty library and SDC are provided.
+- KLayout DRC execution with report parsing and positive/negative smoke fixtures.
+- PDK collateral inspection and integration-state catalogue.
+- Explicit result states: PASS, FAIL, BLOCKED, INCONCLUSIVE, NOT RUN and ERROR.
+- Input inventory/hashes, tool versions, logs and structured JSON/HTML evidence where produced by a flow.
 
-The tool catalogue includes common open EDA tools, explicitly distinguishing execution adapters from catalogue-only and runtime-discovery entries. See docs/TOOL_INTEGRATION_MATRIX.md.
+## Interpreting results
 
-## Build, validation and boundaries
+A **PASS** applies only to the specific configured check and its inputs. Missing tools, libraries, rule decks or other prerequisites must not be treated as success. BLOCKED and NOT RUN indicate that a check could not be evaluated or was not executed; ERROR indicates an execution or reporting problem. Inspect the raw logs and reports, not just the summary.
 
-Follow docs/BUILD_LINUX.md. CI artifacts include the tool manifest, regression logs, reports and official IHP DRC golden output. See docs/SESSION1_ACCEPTANCE.md for release gates and docs/TOOLCHAIN_PROVENANCE.md for tool sources.
+## PDK, licences and boundaries
 
-A PASS only applies to the specific check and inputs. This repository does not claim universal chip verification, foundry qualification, sign-off timing, defence certification, or fabrication-readiness approval. Restricted foundry collateral and commercial tools must only be used with appropriate authorization and licensing.
+The catalogue includes references/profiles for ecosystems such as SKY130, GF180MCU, IHP SG13G2 and ASAP7. A catalogue entry is not proof of validated DRC/LVS or foundry approval. PDK-specific physical verification requires the exact process release, authorized collateral, technology/layer maps, compatible tool versions and validated rule decks.
+
+Commercial simulators, formal engines and emulation platforms require separate licences and authorized installations. Physical silicon tests, wafer inspection, ATE/PUF enrollment, radiation and thermal qualification cannot be established by a software-only CI run.
+
+## Safe evaluation
+
+- Use non-sensitive sample designs for public-repository evaluation.
+- Do not upload classified, export-controlled, customer-confidential or restricted design data to this public repository or an unapproved hosted service.
+- Review licensing and redistribution rights for tools, PDKs, libraries, rule decks and generated artifacts.
+- Treat logs and reports as potentially sensitive.
+- A successful CI run is regression evidence, not security certification or customer acceptance.
+
+## Evaluation procedure
+
+1. Read [the technical evaluation report](docs/EVALUATION_REPORT.md).
+2. Inspect the [successful CI run](https://github.com/Niroop-H/Verifier/actions/runs/39904891080) and its artifacts.
+3. Re-run the included sample project in a clean Linux environment.
+4. Check both positive and negative test cases and inspect raw reports.
+5. Agree on separate customer-specific acceptance criteria before testing any customer design.
+
+**Conclusion:** Session 1 passed its defined automated CI release gate. It establishes a functioning, regression-tested foundation for selected EDA flows—not production sign-off or universal verification.
