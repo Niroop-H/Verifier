@@ -31,7 +31,7 @@ The current repository is public and the local engine is an evaluation tool. Do 
 
 | Threat | Required control before customer deployment | Current repository position |
 |---|---|---|
-| ZIP path traversal, symlink or archive abuse | Reject traversal and unsafe entries; cap compressed/uncompressed size, file count and nesting; extract into a fresh private workspace | Safe extraction exists; validate it against an explicit adversarial archive suite and service deployment |
+| ZIP path traversal, symlink or archive abuse | Reject traversal and unsafe entries; cap compressed/uncompressed size, file count and nesting; extract into a fresh private workspace | Safe extraction has regression coverage for traversal, symlinks, uncompressed-size and compression-ratio limits, and destination-symlink escape; service-level and deployment validation remain required |
 | Malicious RTL, testbench, SBY task, Tcl/Python/Ruby deck | Run untrusted jobs in a disposable isolated worker with no host secrets, restricted syscalls/capabilities and strict resource limits | The local engine launches tools as subprocesses; this alone is not a sandbox |
 | Cross-job or cross-tenant file access | Unique OS identity or equivalent isolation per job; private workspace and artifact namespace; no shared writable directories | Not established by the helper library |
 | Network exfiltration or remote payload retrieval | Deny worker network egress by default; allow only explicitly required, controlled endpoints during image/build preparation | Not enforced by current local engine |
