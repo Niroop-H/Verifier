@@ -2,6 +2,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import signal
 import subprocess
 import time
 import xml.etree.ElementTree as ET
@@ -77,12 +78,38 @@ def execute_check(
     log_path = output_dir / (re.sub(r"[^A-Za-z0-9_.-]+", "_", stage) + ".log")
     version_info = next((probe_tool(s) for s in TOOL_SPECS if s.executable == exe), {})
     version = version_info.get("version")
+    proc: subprocess.Popen[str] | None = None
     try:
-        proc = subprocess.run(command, cwd=str(cwd) if cwd else None,
-                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                              text=True, errors="replace", timeout=timeout, check=False,
-                              env={**os.environ, "LC_ALL": "C", "TZ": "UTC"})
-        output = proc.stdout or ""
+        # Start a separate process group on POSIX so timeout handling can stop
+        # descendants launched by EDA tools, not only the immediate parent.
+        proc = subprocess.Popen(
+            command, cwd=str(cwd) if cwd else None,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, errors="replace",
+            env={**os.environ, "LC_ALL": "C", "TZ": "UTC"},
+            start_new_session=(os.name == "posix"),
+        )
+        try:
+            output, _ = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            if os.name == "posix":
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            else:
+                proc.kill()
+            output, _ = proc.communicate()
+            output = output or ""
+            log_path.write_text(output + "\n[TIMEOUT: process group terminated]\n",
+                                encoding="utf-8", errors="replace")
+            return CheckResult(stage, Status.INCONCLUSIVE,
+                               f"Command timed out after {timeout}s; process group termination was requested.",
+                               required, command=command, tool_version=version, started_utc=started_utc,
+                               duration_seconds=round(time.monotonic()-started, 4),
+                               exit_code=proc.returncode, input_hashes=_hashes(inputs), log_path=str(log_path),
+                               metadata={"output_tail": output[-3000:]})
+        output = output or ""
         log_path.write_text(output, encoding="utf-8", errors="replace")
         if expected_parser:
             status, message = expected_parser(output, proc.returncode)
@@ -94,15 +121,6 @@ def execute_check(
                            started_utc=started_utc, duration_seconds=round(time.monotonic()-started, 4),
                            exit_code=proc.returncode, input_hashes=_hashes(inputs), log_path=str(log_path),
                            metadata={"output_tail": output[-3000:]})
-    except subprocess.TimeoutExpired as exc:
-        output = exc.stdout or b""
-        if isinstance(output, bytes):
-            output = output.decode("utf-8", "replace")
-        log_path.write_text(str(output) + "\n[TIMEOUT]\n", encoding="utf-8")
-        return CheckResult(stage, Status.INCONCLUSIVE, f"Command timed out after {timeout}s.", required,
-                           command=command, tool_version=version, started_utc=started_utc,
-                           duration_seconds=round(time.monotonic()-started, 4),
-                           input_hashes=_hashes(inputs), log_path=str(log_path))
     except OSError as exc:
         return CheckResult(stage, Status.ERROR, f"Could not execute tool: {exc}", required,
                            command=command, tool_version=version, started_utc=started_utc,
