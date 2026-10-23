@@ -4,6 +4,7 @@ Use only authorized designs and decks. Production services must run this layer
 inside isolated, resource-limited workers.
 """
 from __future__ import annotations
+import re
 import shutil
 import subprocess
 import tempfile
@@ -96,6 +97,8 @@ def run_icarus_simulation(files: Sequence[str | Path], top: str, timeout: float 
         return sim_result
 
 def run_yosys_synthesis(files: Sequence[str | Path], top: str, timeout: float = 180.0) -> EdaResult:
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_$]*", top):
+        return EdaResult("synthesis", Status.BLOCKED, "Top must be a valid HDL identifier", [])
     try:
         paths = _validated_sources(files)
     except (ValueError, FileNotFoundError) as exc:
@@ -119,13 +122,11 @@ def run_ghdl_analysis(files: Sequence[str | Path], top: str | None = None, timeo
         staged = _stage_sources(paths, work)
         result = None
         for name in staged:
-            result = run_command("vhdl_analysis", ["ghdl", "-a", "--std=08", name],
-                cwd=work, timeout=timeout)
+            result = run_command("vhdl_analysis", ["ghdl", "-a", "--std=08", name], cwd=work, timeout=timeout)
             if result.status != Status.PASS:
                 return result
         if top:
-            result = run_command("vhdl_elaboration", ["ghdl", "-e", "--std=08", top],
-                cwd=work, timeout=timeout)
+            result = run_command("vhdl_elaboration", ["ghdl", "-e", "--std=08", top], cwd=work, timeout=timeout)
         assert result is not None
         result.evidence = {"source_count": len(paths), "top": top}
         return result
@@ -152,5 +153,4 @@ def run_klayout_deck(deck: str | Path, layout: str | Path, timeout: float = 300.
     if not gds.is_file():
         return EdaResult("physical_verification", Status.BLOCKED, "Layout input does not exist", [])
     # KLayout decks are executable code and must run in isolated workers.
-    return run_command("physical_verification", ["klayout", "-b", "-r", str(script),
-        "-rd", f"input={gds}"], timeout=timeout)
+    return run_command("physical_verification", ["klayout", "-b", "-r", str(script), "-rd", f"input={gds}"], timeout=timeout)
