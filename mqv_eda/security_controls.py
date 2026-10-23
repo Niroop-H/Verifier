@@ -59,10 +59,19 @@ def append_audit_event(path: Path, *, actor: str, action: str, outcome: str,
     """Append a JSONL event and return its SHA-256; deployment controls remain external."""
     if not actor.strip() or not action.strip() or outcome not in {"allow", "deny", "success", "failure"}:
         raise SecurityPolicyError("Audit actor/action must be set and outcome must be recognized.")
-    safe_details = redact_secrets(json.dumps(details or {}, sort_keys=True, default=str))
+    def sanitize(value):
+        if isinstance(value, dict):
+            return {str(k): ("[REDACTED]" if re.search(r"(?i)(token|api[_-]?key|password|passwd|secret|private[_-]?key)", str(k)) else sanitize(v))
+                    for k, v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [sanitize(item) for item in value]
+        if isinstance(value, str):
+            return redact_secrets(value)
+        return value
+    safe_details = sanitize(details or {})
     event = {"timestamp_unix": time.time(), "actor": redact_secrets(actor),
              "action": redact_secrets(action), "outcome": outcome,
-             "resource_id": redact_secrets(resource_id), "details": json.loads(safe_details)}
+             "resource_id": redact_secrets(resource_id), "details": safe_details}
     canonical = json.dumps(event, sort_keys=True, separators=(",", ":"))
     event_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     record = {**event, "event_sha256": event_hash}
