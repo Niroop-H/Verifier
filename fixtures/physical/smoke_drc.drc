@@ -1,5 +1,5 @@
 # Generic KLayout DRC DSL smoke deck only; this is NOT a foundry rule deck.
 source($input_file)
-report("MAH Quantum Verify DRC smoke", $report_file, input_file.top_cell.name)
+report("MAH Quantum Verify DRC smoke", $report_file)
 metal1 = input(1, 0)
 metal1.width(0.05.um).output("M1.MIN_WIDTH", "Metal 1 minimum width less than 0.05um")
