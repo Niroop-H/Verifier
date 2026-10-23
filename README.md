@@ -14,8 +14,9 @@ MAH Quantum Verify is an early-stage EDA verification orchestration platform. Th
 
 - [Security assurance foundation](docs/SESSION2_SECURITY_ASSURANCE.md): path validation, deny-by-default role/action checks, best-effort secret redaction and hash-chained audit events.
 - [Threat model and worker security contract](docs/SESSION2_THREAT_MODEL.md): assets, trust boundaries, attack scenarios, deployment controls and worker-isolation exit criteria.
+- [Isolated worker deployment prototype](docs/WORKER_ISOLATION_DEPLOYMENT.md): constrained Docker runner, runtime assumptions and deployment acceptance tests.
 
-These controls are building blocks, not proof of a secure deployment or defence/regulatory authorization. The current local engine is not a sandbox for untrusted EDA workloads.
+These controls are building blocks, not proof of a secure deployment or defence/regulatory authorization. A constrained Docker runner prototype is included, but it must be validated on a dedicated target host and is not yet a production sandbox.
 
 ## Session 1 — CI results
 
