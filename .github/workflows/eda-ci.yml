@@ -56,21 +56,33 @@ jobs:
           test -x "$RUNNER_TEMP/oss-cad-suite/bin/iverilog"
           echo "$RUNNER_TEMP/oss-cad-suite/bin" >> "$GITHUB_PATH"
 
-      - name: Build OpenSTA from upstream source
+      - name: Build OpenSTA from upstream source (bounded and logged)
+        timeout-minutes: 15
         run: |
+          set -euxo pipefail
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends             build-essential cmake git curl tcl-dev swig bison flex             automake autotools-dev libeigen3-dev libfmt-dev zlib1g-dev libfl-dev
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake git curl tcl-dev swig bison flex \
+            automake autotools-dev libeigen3-dev libfmt-dev zlib1g-dev libfl-dev
           mkdir -p "$RUNNER_TEMP/opensta"
-          curl --fail --location --retry 3             https://raw.githubusercontent.com/davidkebo/cudd/main/cudd_versions/cudd-3.0.0.tar.gz             --output "$RUNNER_TEMP/cudd-3.0.0.tar.gz"
+          curl --fail --location --retry 3 \
+            https://raw.githubusercontent.com/davidkebo/cudd/main/cudd_versions/cudd-3.0.0.tar.gz \
+            --output "$RUNNER_TEMP/cudd-3.0.0.tar.gz"
           tar -xzf "$RUNNER_TEMP/cudd-3.0.0.tar.gz" -C "$RUNNER_TEMP"
           cd "$RUNNER_TEMP/cudd-3.0.0"
-          ./configure
+          ./configure --prefix="$RUNNER_TEMP/cudd-install"
           make --jobs 2
+          make install
           git clone https://github.com/parallaxsw/OpenSTA.git "$RUNNER_TEMP/OpenSTA"
           git -C "$RUNNER_TEMP/OpenSTA" checkout bdc4e054cb917e1b7058444829191838b302cccd
-          cmake -S "$RUNNER_TEMP/OpenSTA" -B "$RUNNER_TEMP/OpenSTA/build"             -DCMAKE_BUILD_TYPE=Release             -DCMAKE_INSTALL_PREFIX=/usr/local             -DCUDD_DIR="$RUNNER_TEMP/cudd-3.0.0"             -DUSE_TCL_READLINE=OFF
+          cmake -S "$RUNNER_TEMP/OpenSTA" -B "$RUNNER_TEMP/OpenSTA/build" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/opensta-install" \
+            -DCUDD_DIR="$RUNNER_TEMP/cudd-install" \
+            -DUSE_TCL_READLINE=OFF
           cmake --build "$RUNNER_TEMP/OpenSTA/build" --parallel 2
-          sudo cmake --install "$RUNNER_TEMP/OpenSTA/build"
+          cmake --install "$RUNNER_TEMP/OpenSTA/build"
+          sudo install -m 0755 "$RUNNER_TEMP/opensta-install/bin/sta" /usr/local/bin/sta
           echo "/usr/local/bin" >> "$GITHUB_PATH"
           command -v sta
           sta -version
