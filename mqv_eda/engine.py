@@ -120,6 +120,17 @@ def execute_check(
         except subprocess.TimeoutExpired:
             timed_out = True
             if os.name == "posix":
+                # Allow wrappers a short grace period to run cleanup handlers
+                # (for example, stop a daemon-managed container), then kill
+                # the entire process group even if the direct child has exited.
+                try:
+                    os.killpg(proc.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                try:
+                    proc.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    pass
                 try:
                     os.killpg(proc.pid, signal.SIGKILL)
                 except ProcessLookupError:
