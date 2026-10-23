@@ -1,4 +1,4 @@
-# Generic smoke deck only; not a foundry rule deck.
+# Generic KLayout DRC DSL smoke deck only; this is NOT a foundry rule deck.
 report("MAH Quantum Verify DRC smoke", $report_file)
 source($input_file)
 metal1 = input(1, 0)

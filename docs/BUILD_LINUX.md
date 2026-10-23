@@ -1,41 +1,49 @@
 # Linux build and test guide
 
-## Supported build runner
-The CI reference runner is Ubuntu 22.04 x86-64 because it provides a consistent baseline for this first open-source EDA suite. Package versions are captured in the job artifact. Use a container or VM for local reproduction.
+## Reference environment
 
-## Install core tools
-Run from a clean Ubuntu machine:
-    
+Use Ubuntu 24.04 x86-64. A clean VM or CI runner is preferred. The CI workflow installs the pinned OSS CAD Suite release, KLayout 0.30.10 and builds OpenSTA against CUDD. CI output records actual executable versions.
+
+## Local prerequisites
+
     sudo apt-get update
-    sudo apt-get install -y build-essential cmake git curl ca-certificates python3 python3-pip python3-venv \
-      iverilog verilator yosys ghdl z3 boolector klayout opensta
+    sudo apt-get install -y python3 python3-pip python3-venv
 
-SymbiYosys (sby) is installed at an explicitly pinned upstream commit by CI:
-    
-    git clone https://github.com/YosysHQ/sby.git
-    cd sby
-    git checkout 79fc9eddca5e33a28cc2f2cd19c9825efd9a7255
-    sudo make install PREFIX=/usr/local
+Install core open-source EDA executables using the project's official instructions or the matching OSS CAD Suite release. For KLayout use https://www.klayout.de/build.html. Do not use Windows binaries inside Linux CI.
 
-Package availability varies by distribution. Always check the tool manifest after installation.
+## Python environment
 
-## Run project tests
     python3 -m venv .venv
     . .venv/bin/activate
     python -m pip install -r requirements-dev.txt
     python -m pytest -q -rs
-    bash scripts/run_regressions.sh
 
-## Run the local verification engine
+## Diagnose tools and profiles
+
     python -m mqv_eda doctor
-    python -m mqv_eda verify fixtures/rtl/comb.v --top comb --out build/demo
+    python -m mqv_eda tool-catalog
+    python -m mqv_eda pdks
+    python -m mqv_eda pdks --profile ihp_sg13g2 --root /opt/pdks/IHP-Open-PDK --json
 
-For a design with a testbench:
-    python -m mqv_eda verify path/to/project.zip --top my_top --testbench tb/tb_my_top.sv --sim-top tb_my_top --out build/my_run
+The PDK command inspects expected files only. It does not validate deck execution or foundry sign-off.
 
-For STA provide a gate-level Verilog netlist, a Liberty timing library and SDC:
+## Run RTL verification
+
+    python -m mqv_eda verify fixtures/projects/good --top comb --testbench tb_comb.v --sim-top tb_comb --out build/demo
+
+For static timing, provide a gate-level netlist, compatible Liberty, and SDC:
+
     python -m mqv_eda verify project/ --top my_top --netlist build/netlist.v --liberty platform/cells.lib --sdc constraints.sdc
 
-For physical checks, supply an authorized deck and GDSII. The generic deck adapter uses input_file and report_file; only decks designed for this interface should be passed to it. Profile-specific decks may need a dedicated adapter.
+For physical DRC/LVS, provide an authorized deck and the actual GDS/reference netlist. The generic KLayout adapter expects a deck that consumes input_file and report_file (and netlist_file for the configured LVS call). Foundry scripts with other interfaces need dedicated adapters.
 
-The engine runs local commands and emits JSON/HTML evidence. It does not upload design sources. Verify customer and foundry data-handling requirements before using any hosted CI worker.
+## Results and status
+
+- PASS: the named check ran and met the stated criterion.
+- FAIL: the check ran and reported a violation or invalid input.
+- BLOCKED: a required tool, file, library, deck or version is missing.
+- INCONCLUSIVE: timeout or unclear report prevents a verdict.
+- NOT RUN: no relevant input or option was supplied.
+- ERROR: adapter or infrastructure error.
+
+Required BLOCKED/NOT RUN/ERROR must never be summarized as PASS. OpenSTA results depend on the specific libraries and constraints. A generic DRC smoke is not a foundry rules regression.

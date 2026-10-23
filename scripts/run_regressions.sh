@@ -105,8 +105,8 @@ grep -Eiq "slack[[:space:]]+\([[:space:]]*VIOLATED[[:space:]]*\)" artifacts/open
 mkdir -p artifacts/drc
 run_ok klayout_make_good_layout klayout -b -r fixtures/physical/make_layout.rb -rd output_file=artifacts/drc/good.gds -rd width=0.20
 run_ok klayout_make_bad_layout klayout -b -r fixtures/physical/make_layout.rb -rd output_file=artifacts/drc/bad.gds -rd width=0.02
-run_ok klayout_drc_good klayout -b -r fixtures/physical/smoke_drc.rb -rd input_file=artifacts/drc/good.gds -rd report_file=artifacts/drc/good.lyrdb
-run_ok klayout_drc_bad klayout -b -r fixtures/physical/smoke_drc.rb -rd input_file=artifacts/drc/bad.gds -rd report_file=artifacts/drc/bad.lyrdb
+run_ok klayout_drc_good klayout -b -r fixtures/physical/smoke_drc.drc -rd input_file=artifacts/drc/good.gds -rd report_file=artifacts/drc/good.lyrdb
+run_ok klayout_drc_bad klayout -b -r fixtures/physical/smoke_drc.drc -rd input_file=artifacts/drc/bad.gds -rd report_file=artifacts/drc/bad.lyrdb
 python3 - <<'PY'
 import xml.etree.ElementTree as ET
 good = ET.parse("artifacts/drc/good.lyrdb").getroot()
