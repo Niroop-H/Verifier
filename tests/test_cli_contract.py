@@ -7,7 +7,7 @@ from mqv_eda.contracts import cli_contract
 def test_cli_parser_registers_new_commands():
     parser = build_parser()
     help_text = parser.format_help()
-    for command in ("inventory", "run-identity", "baseline-freshness", "policy", "sbom", "flaky",
+    for command in ("inventory", "run-identity", "baseline-freshness", "license-inventory", "policy", "sbom", "flaky",
                     "cluster-failures", "coverage", "evidence-scorecard", "provenance", "jobs", "history", "minimize-failures", "validate-config",
                     "approval-record", "validate-waiver", "change-impact", "estimate-resources",
                     "cleanup-workspace", "retention-record", "mutation-score", "golden-corpus", "waivers"):
@@ -51,3 +51,16 @@ def test_baseline_freshness_cli_blocks_stale_baseline(tmp_path, capsys):
     capsys.readouterr()
     assert code == 2
     assert result["status"] == "STALE_OR_UNVERIFIABLE"
+
+
+
+def test_license_inventory_cli_emits_report(tmp_path, capsys):
+    root = tmp_path / "source"
+    root.mkdir()
+    (root / "LICENSE").write_text("SPDX-License-Identifier: Apache-2.0\n")
+    output = tmp_path / "license-report.json"
+    assert main(["license-inventory", str(root), "--out", str(output)]) == 0
+    result = json.loads(output.read_text())
+    capsys.readouterr()
+    assert result["spdx_declared_count"] == 1
+    assert result["files"][0]["spdx_identifiers"] == ["Apache-2.0"]
