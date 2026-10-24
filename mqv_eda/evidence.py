@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
@@ -117,9 +118,11 @@ def build_evidence_manifest(
             "status": result.status.value,
             "required": result.required,
             "message": result.message,
+            "started_utc": result.started_utc,
             "exit_code": result.exit_code,
             "tool_version": result.tool_version,
             "duration_seconds": result.duration_seconds,
+            **_command_evidence(result.command, root),
             "inputs": inputs,
             "log": log,
         })
@@ -160,6 +163,26 @@ def _display_path(value: str, root: Path) -> str:
         return path.resolve().relative_to(root).as_posix()
     except (OSError, ValueError):
         return path.name
+
+
+def _redact_command_token(value: str, root: Path) -> str:
+    """Redact host-specific absolute paths while preserving command structure."""
+    if value.startswith("-") and "=" in value:
+        option, candidate = value.split("=", 1)
+        if Path(candidate).is_absolute():
+            return f"{option}={_display_path(candidate, root)}"
+        return value
+    if Path(value).is_absolute():
+        return _display_path(value, root)
+    return value
+
+
+def _command_evidence(command: list[str], root: Path) -> dict[str, Any]:
+    serialized = json.dumps(command, ensure_ascii=False, separators=(",", ":"))
+    return {
+        "redacted_command": [_redact_command_token(item, root) for item in command],
+        "command_sha256": hashlib.sha256(serialized.encode("utf-8")).hexdigest(),
+    }
 
 
 def _safe_relative(root: Path, value: str) -> Path | None:
