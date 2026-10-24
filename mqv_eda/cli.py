@@ -301,6 +301,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ERROR: {exc}", file=sys.stderr)
             return 2
         print(json.dumps(result, indent=2, sort_keys=True))
+        if args.jobs_action == "run-once" and result.get("state") == "FAILED":
+            return 1
         return 0
     if args.command == "contract":
         result = cli_contract()
