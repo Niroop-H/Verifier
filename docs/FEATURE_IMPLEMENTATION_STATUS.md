@@ -49,7 +49,7 @@ This tracker separates code that exists from complete acceptance of the original
 | 32 | No-network execution mode | Partial | Docker runner requests --network=none; validate all supported deployment paths |
 | 33 | Workspace path containment | Implemented baseline | Continue TOCTOU and platform-specific path testing |
 | 34 | Secret-safe logging | Implemented baseline | Add more secret formats and test all report/log sinks |
-| 35 | Dependency inventory / SBOM | Partial | SBOM now includes installed Python distributions plus native EDA tool PATH presence and declared integration tiers; binary digests/versions, OS packages, PDK metadata, licensing validation, and official schema validation remain |
+| 35 | Dependency inventory / SBOM | Partial | SBOM now includes installed Python distributions plus native EDA tool PATH presence, local executable SHA-256 digests where readable, and declared integration tiers; versions, OS packages, PDK metadata, licensing validation, and official schema validation remain |
 | 36 | License and notice inventory | Partial | CLI inventories license/notice-like files, hashes them, extracts explicit SPDX tags, and flags manual-review files; complete source coverage, dependency mapping, compatibility checks and legal review remain |
 | 37 | Signed build provenance | Partial | Detached provenance signing and verification commands now use OpenSSL and operator-managed keys; builder identity attestation, key trust-root management, build-system integration and signed CI provenance remain |
 | 38 | Customer-managed worker mode | Partial | Complete control-plane/worker separation and prove RTL never leaves the customer host |
@@ -180,3 +180,8 @@ Use `python -m mqv_eda approvals --db .mqv/approvals.sqlite3 create --run-id RUN
 ## Latest incremental implementation — regression history dashboard
 
 Run `python -m mqv_eda history-dashboard report-1.json report-2.json --out regression-dashboard.html` to render an accessible, responsive, script-free HTML dashboard from supplied reports. It summarizes historical check counts, overall status and duration, with semantic table headers and a clear limitation statement. The dashboard does not rerun tests or independently verify the supplied reports.
+
+
+## Latest incremental implementation — native executable digests
+
+The SBOM's native tool inventory now hashes each discovered regular executable with SHA-256 where readable and records an explicit digest state. This detects local binary-content changes between inventories but is not a vendor signature, trusted installation attestation, version record, or license validation.
