@@ -51,7 +51,7 @@ This tracker separates code that exists from complete acceptance of the original
 | 34 | Secret-safe logging | Implemented baseline | Add more secret formats and test all report/log sinks |
 | 35 | Dependency inventory / SBOM | Partial | SBOM now includes installed Python distributions plus native EDA tool PATH presence and declared integration tiers; binary digests/versions, OS packages, PDK metadata, licensing validation, and official schema validation remain |
 | 36 | License and notice inventory | Partial | CLI inventories license/notice-like files, hashes them, extracts explicit SPDX tags, and flags manual-review files; complete source coverage, dependency mapping, compatibility checks and legal review remain |
-| 37 | Signed build provenance | Partial | Bind build artifacts to builder identity and signed provenance/trust roots |
+| 37 | Signed build provenance | Partial | Detached provenance signing and verification commands now use OpenSSL and operator-managed keys; builder identity attestation, key trust-root management, build-system integration and signed CI provenance remain |
 | 38 | Customer-managed worker mode | Partial | Complete control-plane/worker separation and prove RTL never leaves the customer host |
 | 39 | Role and action audit | Implemented baseline | Protect storage and connect authenticated actors in deployed services |
 | 40 | Incident-ready execution record | Partial | Persist termination causes, resource-limit events and worker identity |
@@ -160,3 +160,8 @@ Every standard `verify` run and local queued worker now writes `provenance.json`
 ## Latest incremental implementation — license/notice inventory
 
 Run `python -m mqv_eda license-inventory ./vendor --out license-inventory.json` to hash license/notice-like files and extract explicit SPDX identifiers where present. Files without an SPDX tag are marked for manual review; symlinks are rejected. This is a discovery aid only: it does not infer license permission, determine compatibility, or replace upstream notice preservation and legal review.
+
+
+## Latest incremental implementation — detached provenance signatures
+
+`sign-provenance provenance.json --private-key private.pem --signature provenance.sig` signs the exact provenance bytes using OpenSSL. `verify-provenance-signature provenance.json --public-key trusted-public.pem --signature provenance.sig` verifies them. The public key must be independently trusted; a valid signature alone does not establish signer identity. Protect private keys and do not commit them to the repository.
