@@ -44,6 +44,17 @@ python -m mqv_eda verify fixtures/projects/good --top comb --testbench tb_comb.v
 
 EDA executables must be installed and available on PATH for their corresponding flows. See [Linux build instructions](docs/BUILD_LINUX.md) and `python -m mqv_eda --help` for current options.
 
+## Detached signatures for evidence bundles
+
+For environments that have OpenSSL available, sign the final ZIP with a separately managed private key:
+
+```bash
+python -m mqv_eda sign-evidence build/aegis-evidence.zip --private-key keys/evidence-private.pem --signature build/aegis-evidence.sig
+python -m mqv_eda verify-evidence-signature build/aegis-evidence.zip --public-key keys/evidence-public.pem --signature build/aegis-evidence.sig
+```
+
+Never commit private keys or place them inside the evidence ZIP. The verifier only establishes signature validity for the supplied public key; the customer must independently trust and pin that key. For production, use an approved key-management process and rotate/revoke keys under documented policy.
+
 ## Integrity-checked evidence bundles
 
 Create a ZIP package containing evidence files plus a SHA-256 manifest, then verify its contents after transfer:
