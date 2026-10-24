@@ -7,7 +7,7 @@ from mqv_eda.contracts import cli_contract
 def test_cli_parser_registers_new_commands():
     parser = build_parser()
     help_text = parser.format_help()
-    for command in ("inventory", "run-identity", "baseline-freshness", "license-inventory", "sign-provenance", "verify-provenance-signature", "policy", "sbom", "flaky",
+    for command in ("inventory", "run-identity", "repro-check", "baseline-freshness", "license-inventory", "sign-provenance", "verify-provenance-signature", "policy", "sbom", "flaky",
                     "cluster-failures", "coverage", "evidence-scorecard", "provenance", "jobs", "history", "minimize-failures", "validate-config",
                     "approval-record", "validate-waiver", "change-impact", "estimate-resources",
                     "cleanup-workspace", "retention-record", "mutation-score", "golden-corpus", "waivers"):
