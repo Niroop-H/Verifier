@@ -13,6 +13,7 @@ from .report_analysis import compare_reports, triage_log, write_json
 from .evidence_bundle import create_bundle, verify_bundle
 from .evidence_signing import sign_bundle, verify_bundle_signature
 from .governance import create_run_identity, evaluate_policy, generate_sbom, inventory_inputs
+from .regression_intelligence import cluster_failures, detect_flaky_runs, ingest_cobertura_coverage
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mqv-eda", description="MAH Quantum Verify local EDA verification runner")
@@ -63,6 +64,15 @@ def build_parser() -> argparse.ArgumentParser:
     policy.add_argument("--out", type=Path, default=Path("mqv-policy-decision.json"))
     sbom = sub.add_parser("sbom", help="Generate a dependency inventory for the active Python environment")
     sbom.add_argument("--out", type=Path, default=Path("mqv-sbom.json"))
+    flaky = sub.add_parser("flaky", help="Compare repeated reports for outcome variation")
+    flaky.add_argument("reports", nargs="+", type=Path)
+    flaky.add_argument("--out", type=Path, default=Path("mqv-flaky-analysis.json"))
+    clusters = sub.add_parser("cluster-failures", help="Cluster logs using transparent normalized signatures")
+    clusters.add_argument("logs", nargs="+", type=Path)
+    clusters.add_argument("--out", type=Path, default=Path("mqv-failure-clusters.json"))
+    coverage = sub.add_parser("coverage", help="Import Cobertura-style XML line and branch coverage")
+    coverage.add_argument("xml", type=Path)
+    coverage.add_argument("--out", type=Path, default=Path("mqv-coverage.json"))
     verify = sub.add_parser("verify", help="Run applicable EDA checks on a project folder or ZIP")
     verify.add_argument("source", type=Path)
     verify.add_argument("--top", help="Explicit RTL top-level module")
