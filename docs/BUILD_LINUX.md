@@ -37,6 +37,18 @@ For static timing, provide a gate-level netlist, compatible Liberty, and SDC:
 
 For physical DRC/LVS, provide an authorized deck and the actual GDS/reference netlist. The generic KLayout adapter expects a deck that consumes input_file and report_file (and netlist_file for the configured LVS call). Foundry scripts with other interfaces need dedicated adapters.
 
+## Validate evidence after sharing
+
+Each verification run also writes evidence-manifest.json alongside report.json and report.html. To check that packaged source/log files match the recorded hashes:
+
+    python -m mqv_eda verify-evidence build/demo/evidence-manifest.json
+
+- Exit code 0: referenced files match the recorded hashes.
+- Exit code 1: an integrity problem was detected.
+- Exit code 2: the manifest could not be read or verified.
+
+Keep the manifest and referenced files in the same relative directory layout. The integrity check rejects paths that resolve outside the manifest directory. A passing integrity check is not a signature, an independent audit, or proof of design correctness; see Evidence Manifest.
+
 ## Results and status
 
 - PASS: the named check ran and met the stated criterion.
