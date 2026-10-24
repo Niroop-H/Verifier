@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mah-quantum-verify"
+version = "0.1.0"
+description = "MAH Quantum Verify: local EDA verification orchestration and evidence tooling"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary evaluation software; third-party components retain their own licenses" }
+authors = [{ name = "MAH Quantum" }]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
+]
+
+[project.scripts]
+mqv-eda = "mqv_eda.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["mqv_eda*"]

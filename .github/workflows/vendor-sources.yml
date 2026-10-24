@@ -1,0 +1,106 @@
+name: Vendor pinned EDA source snapshots
+
+on:
+  workflow_dispatch:
+    inputs:
+      pack:
+        description: "Source pack to materialize (PDKs are managed separately)"
+        required: true
+        type: choice
+        options:
+          - formal
+          - rtl-tooling
+          - physical-design
+      confirm:
+        description: "Type VENDOR to materialize the selected source pack into this branch"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vendor-source-snapshots-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  vendor:
+    if: ${{ inputs.confirm == 'VENDOR' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Materialize pinned source snapshots
+        run: python scripts/vendor_sources.py sync --pack "${{ inputs.pack }}"
+
+      - name: Verify every materialized source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/vendor_sources.py verify --pack "${{ inputs.pack }}"
+
+      - name: Report source volume and reject files beyond GitHub's regular-file limit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          pack = "${{ inputs.pack }}"
+          manifest = json.loads(Path("vendor/manifest.json").read_text(encoding="utf-8"))
+          roots = [Path(item["destination"]) for item in manifest["sources"] if item.get("pack") == pack]
+          files = [p for root in roots for p in root.rglob("*") if p.is_file() and not p.is_symlink()]
+          total = sum(p.stat().st_size for p in files)
+          oversized = [(p, p.stat().st_size) for p in files if p.stat().st_size >= 95 * 1024 * 1024]
+          print(f"Vendored files: {len(files):,}")
+          print(f"Working-tree size: {total / (1024 ** 3):.2f} GiB")
+          if oversized:
+              for path, size in oversized:
+                  print(f"REQUIRES REVIEW: {path} ({size / (1024 ** 2):.1f} MiB)")
+              raise SystemExit("Oversized source/artifact detected; split or explicitly review it before committing.")
+          budget = 1.5 * 1024 ** 3
+          print(f"Pack safety budget: {budget / (1024 ** 3):.1f} GiB")
+          if total > budget:
+              raise SystemExit("Selected pack exceeds 1.5 GiB safety budget; curate exclusions or keep the dependency in an external, separately versioned pack.")
+          PY
+
+      - name: Commit vendored source files to the selected branch
+        shell: bash
+        env:
+          TARGET_REF: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Stage only the selected pack's source directories. Do not accidentally
+          # include previously materialized packs or unrelated local vendor files.
+          while IFS= read -r path; do
+            git add -- "$path"
+          done < <(python - <<'PY'
+          import json
+          from pathlib import Path
+          pack = "${{ inputs.pack }}"
+          manifest = json.loads(Path("vendor/manifest.json").read_text(encoding="utf-8"))
+          for item in manifest["sources"]:
+              if item.get("pack") == pack:
+                  print(item["destination"])
+          PY
+          )
+          git add -- vendor/manifest.json
+          if git diff --cached --quiet; then
+            echo "No source snapshot changes to commit."
+            exit 0
+          fi
+          git commit -m "Vendor pinned upstream EDA source snapshots"
+          git push origin "HEAD:${TARGET_REF}"

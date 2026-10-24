@@ -10,6 +10,10 @@ MAH Quantum Verify is an early-stage EDA verification orchestration platform. Th
 
 > **Scope boundary:** This is not a claim of universal chip verification, foundry sign-off, defence certification, or fabrication readiness.
 
+## Product roadmap — 50 high-value engineering features
+
+The [50-feature engineering backlog](docs/FEATURE_CATALOG_50.md) prioritizes less-visible capabilities that matter in serious verification workflows. See the [live implementation status](docs/FEATURE_IMPLEMENTATION_STATUS.md) for a conservative item-by-item breakdown of implemented baselines, partial work, and remaining acceptance criteria. The roadmap is not a claim that all listed features are production-ready.
+
 ## Session 2 — Security assurance foundation
 
 - [Session 2 completion status](docs/SESSION2_COMPLETION_STATUS.md): delivered controls, latest CI evidence, and the explicit production-readiness blockers.
@@ -30,19 +34,109 @@ The latest cited CI run completed with all three jobs successful:
 
 The suite exercises selected RTL lint, Verilog simulation, synthesis, VHDL analysis, formal proof/counterexample, static timing and DRC fixtures. Review the [technical evaluation report](docs/EVALUATION_REPORT.md), [acceptance criteria](docs/SESSION1_ACCEPTANCE.md), [tool integration matrix](docs/TOOL_INTEGRATION_MATRIX.md), [open PDK notes](docs/OPEN_PDK_SUPPORT.md), and [toolchain provenance](docs/TOOLCHAIN_PROVENANCE.md).
 
-## Quick start
+## Install and quick start
+
+### Install the packaged CLI
+
+Python 3.10 or newer is required. Download the wheel from the successful GitHub Actions run artifact named `mah-quantum-verify-python-distribution`, then install it:
+
+```bash
+python -m pip install ./mah_quantum_verify-0.1.0-py3-none-any.whl
+mqv-eda --help
+mqv-eda doctor
+mqv-eda tool-catalog
+mqv-eda pdks
+```
+
+The wheel contains the MAH Quantum Verify Python application. EDA executables are separate system dependencies and must be installed and available on `PATH` for each relevant flow. The package does not bundle commercial tools or PDK collateral.
+
+### Run the sample project from a source checkout
 
 On Linux with Python 3:
 
 ```bash
-python3 -m pip install -r requirements-dev.txt
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -r requirements-dev.txt
 python -m mqv_eda doctor
 python -m mqv_eda tool-catalog
 python -m mqv_eda pdks
 python -m mqv_eda verify fixtures/projects/good --top comb --testbench tb_comb.v --sim-top tb_comb --out build/demo
 ```
 
-EDA executables must be installed and available on PATH for their corresponding flows. See [Linux build instructions](docs/BUILD_LINUX.md) and `python -m mqv_eda --help` for current options.
+See [Linux build instructions](docs/BUILD_LINUX.md) and `python -m mqv_eda --help` for current options.
+
+## Detached signatures for evidence bundles
+
+For environments that have OpenSSL available, sign the final ZIP with a separately managed private key:
+
+```bash
+python -m mqv_eda sign-evidence build/aegis-evidence.zip --private-key keys/evidence-private.pem --signature build/aegis-evidence.sig
+python -m mqv_eda verify-evidence-signature build/aegis-evidence.zip --public-key keys/evidence-public.pem --signature build/aegis-evidence.sig
+```
+
+Never commit private keys or place them inside the evidence ZIP. The verifier only establishes signature validity for the supplied public key; the customer must independently trust and pin that key. For production, use an approved key-management process and rotate/revoke keys under documented policy.
+
+## Integrity-checked evidence bundles
+
+Create a ZIP package containing evidence files plus a SHA-256 manifest, then verify its contents after transfer:
+
+```bash
+python -m mqv_eda bundle create mqv-report build/aegis-evidence.zip --project demo
+python -m mqv_eda bundle verify build/aegis-evidence.zip
+```
+
+The verifier checks member paths, manifest membership, file sizes, and file hashes. This detects post-export changes relative to the included manifest; it does not authenticate the publisher because the manifest is unsigned. Do not include restricted or classified data unless the destination and transfer process are approved.
+
+## Evidence comparison and failure triage
+
+Compare two JSON reports and write a machine-readable regression summary:
+
+```bash
+python -m mqv_eda compare baseline/report.json candidate/report.json --out build/regression.json
+```
+
+A newly failing check or a removed baseline check returns exit code 1; malformed reports return 2. Review the output before drawing engineering conclusions.
+
+Analyze a tool log using deterministic, evidence-linked patterns:
+
+```bash
+python -m mqv_eda triage build/demo/logs/RTL_COMPILE.log --out build/triage.json
+
+### Engineering governance and regression workflows
+
+```bash
+# Bind a report to input/configuration/toolchain identity and emit provenance
+python -m mqv_eda verify fixtures/projects/good --top comb --testbench tb_comb.v --sim-top tb_comb --out build/demo
+python -m mqv_eda sign-provenance build/demo/provenance.json --private-key keys/provenance-private.pem --signature build/demo/provenance.sig
+
+# Execute controlled reruns and compare check outcomes
+python -m mqv_eda repro-check fixtures/projects/good --runs 3 --top comb --testbench tb_comb.v --sim-top tb_comb --out build/repro
+
+# Review baseline freshness, license notices and historical regressions
+python -m mqv_eda baseline-freshness baseline/report.json candidate/report.json --max-age-seconds 604800
+python -m mqv_eda license-inventory vendor --out build/license-inventory.json
+python -m mqv_eda history-dashboard build/demo/report.json build/repro/run-01/report.json --out build/regression-dashboard.html
+
+# Execute one locally queued verification job
+python -m mqv_eda jobs --db .mqv/jobs.sqlite3 submit job-payload.json
+python -m mqv_eda jobs --db .mqv/jobs.sqlite3 run-once --worker-id local-worker
+
+# Record a review decision against an exact report digest
+python -m mqv_eda approvals --db .mqv/approvals.sqlite3 create --run-id RUN_ID --report-sha256 REPORT_SHA256 --actor REVIEWER --role release-reviewer --decision APPROVE --rationale "Evidence reviewed" --run-operator OPERATOR --policy-author POLICY_AUTHOR
+```
+
+These workflows provide local evidence, governance and repeatability controls. They do not authenticate local actor labels, prove bit-for-bit reproducibility, or authorize tape-out/fabrication. Review each command's generated evidence and documented limitations.
+```
+
+Triage suggestions are heuristics, not proven root causes. They include matching log lines and hashes so an engineer can inspect the original evidence. Neither command independently validates the underlying EDA result.
+
+## Product differentiation and customer trust
+
+- [Customer choice and competitive advantage backlog](docs/CUSTOMER_CHOICE_AND_COMPETITIVE_ADVANTAGE.md): measurable differentiators, customer value metrics, defence-oriented requirements, and release gates.
+- [Differentiation and defence readiness plan](docs/DIFFERENTIATION_AND_DEFENCE_READINESS.md): data custody, security, supply-chain transparency, pilot criteria, and claims boundaries.
+
+These documents describe implementation targets and acceptance criteria. They are not claims that all listed features, security controls, certifications, or defence approvals are already complete.
 
 ## Current implementation areas
 

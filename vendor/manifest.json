@@ -1,0 +1,194 @@
+{
+  "schema_version": 1,
+  "policy": {
+    "network_required_for_sync_only": true,
+    "runtime_must_not_fetch_sources": true,
+    "require_full_git_history": true,
+    "preserve_upstream_license_files": true,
+    "never_relabel_upstream_code_as_mahar_quantum_owned": true
+  },
+  "sources": [
+    {
+      "name": "symbiyosys",
+      "repository": "https://github.com/YosysHQ/sby.git",
+      "revision": "79fc9eddca5e33a28cc2f2cd19c9825efd9a7255",
+      "destination": "vendor/src/symbiyosys",
+      "license_review": "required",
+      "purpose": "Formal verification task orchestration",
+      "notes": "Existing repository provenance records this exact commit. Re-check its license and transitive dependency obligations before redistribution.",
+      "pack": "formal"
+    },
+    {
+      "name": "opensta",
+      "repository": "https://github.com/parallaxsw/OpenSTA.git",
+      "revision": "bdc4e054cb917e1b7058444829191838b302cccd",
+      "destination": "vendor/src/opensta",
+      "license_review": "required",
+      "purpose": "Static timing analysis",
+      "notes": "Existing CI checks out this exact commit. Build dependencies such as CUDD must be separately pinned and reviewed.",
+      "pack": "physical-design"
+    },
+    {
+      "name": "openroad-flow-scripts",
+      "repository": "https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts.git",
+      "revision": "eda8e552974d47a12616294dddf4012d892548d3",
+      "destination": "vendor/src/openroad-flow-scripts",
+      "license_review": "required",
+      "purpose": "Reproducible reference flow collateral and synthetic timing fixture provenance",
+      "notes": "Curated source snapshot excludes flow/platforms PDK and library collateral to keep the core repository maintainable. Platform collateral must be separately pinned, license-reviewed, and packaged as optional platform packs before physical-design flows are claimed operational.",
+      "exclude_paths": [
+        "flow/platforms"
+      ],
+      "pack": "physical-design"
+    },
+    {
+      "name": "yosys",
+      "repository": "https://github.com/YosysHQ/yosys.git",
+      "revision": "5053d0e266d9e5f895211e39e6ee3a94cbba408a",
+      "destination": "vendor/src/yosys",
+      "license_review": "required",
+      "purpose": "RTL synthesis and structural checks",
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "rtl-tooling"
+    },
+    {
+      "name": "iverilog",
+      "repository": "https://github.com/steveicarus/iverilog.git",
+      "revision": "9cfecc9c9ef39a58ffdd4ac02776cf2485b72fe0",
+      "destination": "vendor/src/iverilog",
+      "license_review": "required",
+      "purpose": "Verilog compiler and simulation runtime",
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "rtl-tooling"
+    },
+    {
+      "name": "verilator",
+      "repository": "https://github.com/verilator/verilator.git",
+      "revision": "0041d207c3dcede92f48b86e0c7e2b70626cd86c",
+      "destination": "vendor/src/verilator",
+      "license_review": "required",
+      "purpose": "SystemVerilog lint and compiled simulation",
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "rtl-tooling"
+    },
+    {
+      "name": "ghdl",
+      "repository": "https://github.com/ghdl/ghdl.git",
+      "revision": "c966be32400b25310a6d1028ab3a3b8462a8dea5",
+      "destination": "vendor/src/ghdl",
+      "license_review": "required",
+      "purpose": "VHDL analysis and simulation",
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "rtl-tooling"
+    },
+    {
+      "name": "openroad",
+      "repository": "https://github.com/The-OpenROAD-Project/OpenROAD.git",
+      "revision": "6f3f28cc85407d71ba64a550cca194d8a6a01c1c",
+      "destination": "vendor/src/openroad",
+      "license_review": "required",
+      "purpose": "Physical design and implementation engine",
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "physical-design"
+    },
+    {
+      "name": "eqy",
+      "repository": "https://github.com/YosysHQ/eqy.git",
+      "revision": "fb8b21160297b3e66bf94f3c24f8a8bf1cd3fd51",
+      "destination": "vendor/src/eqy",
+      "license_review": "required",
+      "purpose": "Hardware equivalence checking",
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "formal"
+    },
+    {
+      "name": "verible",
+      "repository": "https://github.com/chipsalliance/verible.git",
+      "revision": "0f26265133bda3ade669bc36fc71a6e1f39ad809",
+      "destination": "vendor/src/verible",
+      "license_review": "required",
+      "purpose": "SystemVerilog parser and lint tools",
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "rtl-tooling"
+    },
+    {
+      "name": "surelog",
+      "repository": "https://github.com/chipsalliance/Surelog.git",
+      "revision": "6204ae5480df9603b7312d47d630bb5ca307b05d",
+      "destination": "vendor/src/surelog",
+      "license_review": "required",
+      "purpose": "SystemVerilog parser and elaboration",
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "rtl-tooling"
+    },
+    {
+      "name": "z3",
+      "repository": "https://github.com/Z3Prover/z3.git",
+      "revision": "225cb12d607acf2728a56ab3b0672a5d9a788c1a",
+      "destination": "vendor/src/z3",
+      "license_review": "required",
+      "purpose": "SMT solver",
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "formal"
+    },
+    {
+      "name": "boolector",
+      "repository": "https://github.com/Boolector/boolector.git",
+      "revision": "43dae91c1070e5e2633e036ebd75ffb13fe261e1",
+      "destination": "vendor/src/boolector",
+      "license_review": "required",
+      "purpose": "SMT solver",
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "formal"
+    },
+    {
+      "name": "sv2v",
+      "repository": "https://github.com/zachjs/sv2v.git",
+      "revision": "493a88f930802da68f592c192ec86991eaf95c49",
+      "destination": "vendor/src/sv2v",
+      "license_review": "required",
+      "purpose": "SystemVerilog-to-Verilog conversion",
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "rtl-tooling"
+    },
+    {
+      "name": "cocotb",
+      "repository": "https://github.com/cocotb/cocotb.git",
+      "revision": "f7f4f7f6648b61be47c830649b3157c7f8e1262f",
+      "destination": "vendor/src/cocotb",
+      "license_review": "required",
+      "purpose": "Python HDL testbench framework",
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "rtl-tooling"
+    },
+    {
+      "name": "openlane",
+      "repository": "https://github.com/efabless/openlane.git",
+      "revision": "e0d2e618a8834e733d28dfcc02fa166941be7e71",
+      "destination": "vendor/src/openlane",
+      "license_review": "required",
+      "purpose": "RTL-to-GDS flow orchestration",
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "physical-design"
+    }
+  ],
+  "binary_artifacts": [
+    {
+      "name": "oss-cad-suite-linux-x64",
+      "version": "2026-10-22",
+      "url": "https://github.com/YosysHQ/oss-cad-suite-build/releases/download/2026-10-22/oss-cad-suite-linux-x64-20261022.tgz",
+      "sha256": "45b7401d677f1e6cffb19dcaafb8e92c95a49dfc05b332ae4d00b84c94f62f6e",
+      "destination": "vendor/artifacts/oss-cad-suite-linux-x64-20261022.tgz",
+      "license_review": "required",
+      "purpose": "Pinned evaluation toolchain distribution",
+      "notes": "Checksum is from the repository's existing CI configuration. Verify the upstream release and redistribution terms before bundling it into a customer installer."
+    }
+  ],
+  "pack_policy": {
+    "formal": "Formal engines and orchestration; validate individual solver/build dependencies before use.",
+    "rtl-tooling": "RTL simulation, parsing, linting, conversion, and testbench tooling.",
+    "physical-design": "Physical implementation and flow collateral; platform/PDK data remains separate.",
+    "max_snapshot_bytes": 1610612736,
+    "note": "Packs are acquisition/CI groupings, not a claim that all dependencies are complete, licensed for redistribution, or validated for production."
+  }
+}
