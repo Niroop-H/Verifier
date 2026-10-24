@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 from typing import Any
 
-from .models import CheckResult, Status, aggregate_status, utc_now
+from .models import CheckResult, aggregate_status, utc_now
 from .security import sha256_file
 
 MANIFEST_SCHEMA_VERSION = "1.0"
@@ -18,30 +17,30 @@ def build_evidence_manifest(
     *,
     generated_utc: str | None = None,
 ) -> dict[str, Any]:
-    """Build a deterministic-content evidence manifest for one verification run.
+    """Build an evidence manifest with input and log digests for a run.
 
-    The manifest records hashes for report inputs that still exist and for the
-    generated report files. It deliberately does not claim that hashes prove
-    design correctness, tool trustworthiness, or a validated execution host.
+    Recorded hashes identify observed bytes. They do not prove design correctness,
+    tool trustworthiness, or that a verification run was complete.
     """
     root = Path(output_dir).resolve()
-    metadata = metadata or {}
     checks: list[dict[str, Any]] = []
 
     for result in results:
-        inputs: list[dict[str, str]] = []
-        # CheckResult currently stores input hashes keyed by absolute path.
+        inputs: list[dict[str, Any]] = []
         for source_path, expected_hash in sorted(result.input_hashes.items()):
-            item = {"path": _display_path(source_path, root), "sha256": expected_hash}
+            item: dict[str, Any] = {
+                "path": _display_path(source_path, root),
+                "sha256_at_check_time": expected_hash,
+            }
             try:
-                path = Path(source_path)
-                if path.is_file():
-                    item["observed_sha256"] = sha256_file(path)
-                    item["exists_at_manifest_time"] = "true"
+                source = Path(source_path)
+                if source.is_file():
+                    item["observed_sha256"] = sha256_file(source)
+                    item["exists_at_manifest_time"] = True
                 else:
-                    item["exists_at_manifest_time"] = "false"
+                    item["exists_at_manifest_time"] = False
             except OSError:
-                item["exists_at_manifest_time"] = "false"
+                item["exists_at_manifest_time"] = False
             inputs.append(item)
 
         log = None
@@ -74,7 +73,7 @@ def build_evidence_manifest(
         "product": "MAH Quantum Verify",
         "generated_utc": generated_utc or utc_now(),
         "overall_status": aggregate_status(results).value,
-        "run_metadata": metadata,
+        "run_metadata": metadata or {},
         "checks": checks,
         "evidence_boundary": (
             "Hashes identify recorded bytes; they do not prove correctness, "
@@ -85,27 +84,25 @@ def build_evidence_manifest(
 
 
 def _display_path(value: str, root: Path) -> str:
-    """Prefer a relative path for artifacts within this run directory."""
+    """Return relative artifact paths and avoid disclosing host paths for externals."""
     try:
         return Path(value).resolve().relative_to(root).as_posix()
     except (OSError, ValueError):
-        # Do not leak absolute host paths for external files into customer reports.
         return Path(value).name
 
 
-def _write_json(path: Path, document: dict[str, Any]) -> None:
-    path.write_text(
-        json.dumps(document, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
+def _safe_relative(root: Path, value: str) -> Path | None:
+    candidate = (root / value).resolve()
+    if not candidate.is_relative_to(root):
+        return None
+    return candidate
 
 
 def verify_evidence_manifest(path: Path) -> dict[str, Any]:
-    """Verify observed hashes embedded in a manifest against current files.
+    """Verify hashes for referenced files present relative to a manifest.
 
-    This verifies a detached evidence bundle only for referenced paths that
-    are present relative to the manifest directory. Missing logs are reported
-    as missing rather than being interpreted as valid evidence.
+    Only files whose references remain within the manifest directory are opened.
+    A recorded file is never considered valid merely because it is missing.
     """
     path = Path(path)
     document = json.loads(path.read_text(encoding="utf-8"))
@@ -113,45 +110,33 @@ def verify_evidence_manifest(path: Path) -> dict[str, Any]:
     problems: list[dict[str, str]] = []
     checked = 0
 
+    def verify_one(rel: str, expected: str) -> None:
+        nonlocal checked
+        candidate = _safe_relative(root, rel)
+        if candidate is None:
+            problems.append({"path": rel, "status": "UNSAFE_PATH"})
+            return
+        if not candidate.is_file():
+            problems.append({"path": rel, "status": "MISSING"})
+            return
+        try:
+            actual = sha256_file(candidate)
+        except OSError:
+            problems.append({"path": rel, "status": "UNREADABLE"})
+            return
+        checked += 1
+        if actual != expected:
+            problems.append({"path": rel, "status": "HASH_MISMATCH"})
+
     for check in document.get("checks", []):
         for item in check.get("inputs", []):
             expected = item.get("observed_sha256")
             rel = item.get("path")
-            if not expected or not rel:
-                continue
-            candidate = (root / rel).resolve()
-            if not candidate.is_relative_to(root):
-                problems.append({"path": str(rel), "status": "UNSAFE_PATH"})
-                continue
-            if not candidate.is_file():
-                problems.append({"path": str(rel), "status": "MISSING"})
-                continue
-            checked += 1
-            try:
-                actual = sha256_file(candidate)
-            except OSError:
-                problems.append({"path": str(rel), "status": "UNREADABLE"})
-                continue
-            if actual != expected:
-                problems.append({"path": str(rel), "status": "HASH_MISMATCH"})
-
+            if expected and rel:
+                verify_one(str(rel), str(expected))
         log = check.get("log")
-        if log:
-            rel = log.get("path")
-            expected = log.get("sha256")
-            if rel and expected:
-                candidate = (root / rel).resolve()
-                if not candidate.is_relative_to(root):
-                    problems.append({"path": str(rel), "status": "UNSAFE_PATH"})
-                elif not candidate.is_file():
-                    problems.append({"path": str(rel), "status": "MISSING"})
-                else:
-                    checked += 1
-                    try:
-                        if sha256_file(candidate) != expected:
-                            problems.append({"path": str(rel), "status": "HASH_MISMATCH"})
-                    except OSError:
-                        problems.append({"path": str(rel), "status": "UNREADABLE"})
+        if log and log.get("path") and log.get("sha256"):
+            verify_one(str(log["path"]), str(log["sha256"]))
 
     return {
         "schema_version": MANIFEST_SCHEMA_VERSION,
@@ -159,5 +144,8 @@ def verify_evidence_manifest(path: Path) -> dict[str, Any]:
         "integrity_status": "PASS" if not problems else "FAIL",
         "items_checked": checked,
         "problems": problems,
-        "note": "Integrity verification covers referenced files only; it does not validate design correctness or the trustworthiness of the original run.",
+        "note": (
+            "Integrity verification covers referenced files only; it does not "
+            "validate design correctness or the trustworthiness of the original run."
+        ),
     }
