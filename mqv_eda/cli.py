@@ -51,6 +51,14 @@ def build_parser() -> argparse.ArgumentParser:
     sigverify.add_argument("bundle", type=Path)
     sigverify.add_argument("--public-key", type=Path, required=True)
     sigverify.add_argument("--signature", type=Path, required=True)
+    sign_prov = sub.add_parser("sign-provenance", help="Sign a provenance JSON file with an operator-managed key")
+    sign_prov.add_argument("provenance", type=Path)
+    sign_prov.add_argument("--private-key", type=Path, required=True)
+    sign_prov.add_argument("--signature", type=Path, required=True)
+    verify_prov = sub.add_parser("verify-provenance-signature", help="Verify a detached provenance signature")
+    verify_prov.add_argument("provenance", type=Path)
+    verify_prov.add_argument("--public-key", type=Path, required=True)
+    verify_prov.add_argument("--signature", type=Path, required=True)
     compare = sub.add_parser("compare", help="Compare two JSON evidence reports and identify regressions")
     compare.add_argument("baseline", type=Path)
     compare.add_argument("candidate", type=Path)
@@ -344,6 +352,24 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "verify-evidence-signature":
         try:
             result = verify_bundle_signature(args.bundle, args.public_key, args.signature)
+        except (OSError, ValueError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2))
+        return 0 if result["valid"] else 2
+    if args.command == "sign-provenance":
+        try:
+            result = sign_bundle(args.provenance, args.private_key, args.signature)
+            result["signed_artifact"] = "provenance"
+        except (OSError, ValueError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2))
+        return 0
+    if args.command == "verify-provenance-signature":
+        try:
+            result = verify_bundle_signature(args.provenance, args.public_key, args.signature)
+            result["verified_artifact"] = "provenance"
         except (OSError, ValueError) as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
             return 2
