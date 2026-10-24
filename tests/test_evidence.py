@@ -67,6 +67,32 @@ def test_verify_manifest_detects_changed_log_and_input(tmp_path):
     assert {item["status"] for item in report["problems"]} == {"HASH_MISMATCH"}
 
 
+
+def test_verify_manifest_fails_when_input_changed_after_check(tmp_path):
+    import hashlib
+    source = tmp_path / "design.v"
+    source.write_text("module top; endmodule\\n", encoding="utf-8")
+    checked_hash = hashlib.sha256(source.read_bytes()).hexdigest()
+    # Simulate a design file being modified after the check captured its digest.
+    source.write_text("module top; assign x = 1; endmodule\\n", encoding="utf-8")
+    result = CheckResult(
+        "RTL_LINT",
+        Status.PASS,
+        "lint completed",
+        input_hashes={str(source): checked_hash},
+    )
+    document = build_evidence_manifest(tmp_path, [result])
+    assert document["checks"][0]["inputs"][0]["changed_since_check"] is True
+    document["checks"][0]["inputs"][0]["path"] = "design.v"
+    document["checks"][0]["inputs"][0]["bundled"] = True
+    manifest_path = tmp_path / "evidence-manifest.json"
+    manifest_path.write_text(json.dumps(document), encoding="utf-8")
+
+    report = verify_evidence_manifest(manifest_path)
+    assert report["integrity_status"] == "FAIL"
+    assert any(problem["status"] == "INPUT_CHANGED_DURING_RUN" for problem in report["problems"])
+
+
 def test_verify_manifest_rejects_path_escape(tmp_path):
     import json
     manifest_path = tmp_path / "evidence-manifest.json"
