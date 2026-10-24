@@ -574,8 +574,11 @@ def main(argv: list[str] | None = None) -> int:
                 })
             fingerprints = {record["input_fingerprint_sha256"] for record in run_records}
             signatures = {json.dumps(record["check_signature"], sort_keys=True) for record in run_records}
+            checks_executed = all(bool(record["check_signature"]) for record in run_records)
             if len(fingerprints) != 1:
                 status = "INPUTS_CHANGED"
+            elif not checks_executed:
+                status = "NO_CHECKS_RECORDED"
             elif len(signatures) != 1:
                 status = "NONDETERMINISTIC_OUTCOME"
             else:
@@ -585,6 +588,7 @@ def main(argv: list[str] | None = None) -> int:
                 "runs_requested": args.runs, "runs_completed": len(run_records),
                 "input_fingerprint_stable": len(fingerprints) == 1,
                 "outcome_signature_stable": len(signatures) == 1,
+                "checks_recorded_in_every_run": checks_executed,
                 "runs": run_records,
                 "limitations": [
                     "This compares check outcomes, not byte-for-byte report, waveform, netlist, or layout reproducibility.",
