@@ -148,12 +148,21 @@ def verify_evidence_manifest(path: Path) -> dict[str, Any]:
 
     for check in document.get("checks", []):
         for item in check.get("inputs", []):
-            expected = item.get("observed_sha256")
             rel = item.get("path")
-            if not expected or not rel:
+            if not rel:
+                problems.append({"path": "<missing-path>", "status": "INVALID_MANIFEST_ENTRY"})
                 continue
+            if item.get("changed_since_check") is True:
+                problems.append({"path": str(rel), "status": "INPUT_CHANGED_DURING_RUN"})
+            if item.get("exists_at_manifest_time") is False:
+                problems.append({"path": str(rel), "status": "MISSING_AT_MANIFEST_TIME"})
+                continue
+            expected = item.get("observed_sha256")
             if item.get("bundled") is False:
                 problems.append({"path": str(rel), "status": "EXTERNAL_UNVERIFIABLE"})
+                continue
+            if not expected:
+                problems.append({"path": str(rel), "status": "HASH_UNAVAILABLE"})
                 continue
             verify_one(str(rel), str(expected))
         log = check.get("log")
