@@ -1,25 +1,28 @@
 #!/usr/bin/env python3
-"""Synchronize and verify pinned upstream source snapshots.
+"""Materialize pinned upstream source snapshots into the main repository.
 
-This tool deliberately vendors complete Git repositories at immutable commit IDs.
-It does not rewrite upstream license/copyright files and does not download anything
-during MAH Quantum Verify runtime. Run from the repository root.
+Snapshots contain source files (including upstream notices), not nested Git
+repositories. A small provenance marker records the exact origin/revision and a
+deterministic digest so the outer MAH Quantum Verify repository can track them.
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "vendor" / "manifest.json"
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
+MARKER = ".mqv-vendor-provenance.json"
 
 
 def load_manifest() -> dict[str, Any]:
@@ -29,6 +32,7 @@ def load_manifest() -> dict[str, Any]:
     if not isinstance(data.get("sources"), list):
         raise ValueError("manifest.sources must be a list")
     seen: set[str] = set()
+    destinations: set[Path] = set()
     for item in data["sources"]:
         name = item.get("name", "")
         destination = item.get("destination", "")
@@ -41,11 +45,14 @@ def load_manifest() -> dict[str, Any]:
             raise ValueError(f"{name}: revision must be a full 40-character commit SHA")
         if not repository.startswith("https://"):
             raise ValueError(f"{name}: repository must use HTTPS")
+        if not destination.startswith("vendor/src/"):
+            raise ValueError(f"{name}: source destination must be under vendor/src/")
         dest = (ROOT / destination).resolve()
         if ROOT not in dest.parents:
             raise ValueError(f"{name}: destination escapes repository root")
-        if not destination.startswith("vendor/src/"):
-            raise ValueError(f"{name}: source destination must be under vendor/src/")
+        if dest in destinations:
+            raise ValueError(f"{name}: duplicate destination")
+        destinations.add(dest)
     return data
 
 
@@ -62,48 +69,94 @@ def git_available() -> None:
         raise RuntimeError("Git is required for source synchronization and verification.")
 
 
+def tree_digest(root: Path) -> str:
+    """Hash paths, file bytes, executable bits and symlink targets deterministically."""
+    digest = hashlib.sha256()
+    for path in sorted(root.rglob("*"), key=lambda p: p.relative_to(root).as_posix()):
+        if path.name == MARKER:
+            continue
+        relative = path.relative_to(root).as_posix().encode("utf-8", errors="surrogateescape")
+        if path.is_symlink():
+            kind = b"L"
+            payload = os.readlink(path).encode("utf-8", errors="surrogateescape")
+            executable = b""
+        elif path.is_dir():
+            kind, payload, executable = b"D", b"", b""
+        elif path.is_file():
+            kind = b"F"
+            payload = path.read_bytes()
+            executable = b"x" if path.stat().st_mode & 0o111 else b"-"
+        else:
+            raise RuntimeError(f"Unsupported special file in source snapshot: {path}")
+        digest.update(kind + b"\0" + relative + b"\0" + executable + b"\0")
+        digest.update(len(payload).to_bytes(8, "big"))
+        digest.update(payload)
+    return digest.hexdigest()
+
+
+def read_marker(destination: Path) -> dict[str, Any] | None:
+    path = destination / MARKER
+    if not path.is_file():
+        return None
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+        return value if isinstance(value, dict) else None
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
 def sync(item: dict[str, Any]) -> None:
     destination = ROOT / item["destination"]
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
-        if not (destination / ".git").is_dir():
-            raise RuntimeError(f"Refusing to overwrite non-Git directory: {destination}")
-        origin = run(["git", "remote", "get-url", "origin"], cwd=destination)
-        if origin.rstrip("/") != item["repository"].rstrip("/"):
-            raise RuntimeError(f"{destination}: origin mismatch ({origin})")
-        dirty = run(["git", "status", "--porcelain"], cwd=destination)
-        if dirty:
-            raise RuntimeError(f"Refusing to overwrite dirty source tree: {destination}")
-        run(["git", "fetch", "--tags", "origin"], cwd=destination)
-    else:
-        run(["git", "clone", "--no-checkout", item["repository"], str(destination)])
-    run(["git", "cat-file", "-e", f"{item['revision']}^{{commit}}"], cwd=destination)
-    run(["git", "checkout", "--detach", item["revision"]], cwd=destination)
-    actual = run(["git", "rev-parse", "HEAD"], cwd=destination)
-    if actual != item["revision"]:
-        raise RuntimeError(f"{item['name']}: requested {item['revision']}, got {actual}")
-    print(f"SYNCED {item['name']} {actual} -> {item['destination']}")
+        marker = read_marker(destination)
+        if not marker or marker.get("repository") != item["repository"] or marker.get("revision") != item["revision"]:
+            raise RuntimeError(f"Refusing to overwrite unrecognized or differently pinned directory: {destination}")
+        if marker.get("tree_sha256") != tree_digest(destination):
+            raise RuntimeError(f"Refusing to overwrite modified source snapshot: {destination}")
+        shutil.rmtree(destination)
+
+    with tempfile.TemporaryDirectory(prefix="mqv-vendor-") as temporary:
+        checkout = Path(temporary) / "checkout"
+        run(["git", "clone", "--no-checkout", item["repository"], str(checkout)])
+        # Explicitly request the full commit so it is not dependent on the default branch name.
+        run(["git", "fetch", "origin", item["revision"]], cwd=checkout)
+        run(["git", "checkout", "--detach", item["revision"]], cwd=checkout)
+        actual = run(["git", "rev-parse", "HEAD"], cwd=checkout)
+        if actual != item["revision"]:
+            raise RuntimeError(f"{item['name']}: requested {item['revision']}, got {actual}")
+        shutil.copytree(checkout, destination, symlinks=True,
+                        ignore=shutil.ignore_patterns(".git"))
+    digest = tree_digest(destination)
+    marker = {
+        "schema_version": 1,
+        "name": item["name"],
+        "repository": item["repository"],
+        "revision": item["revision"],
+        "tree_sha256": digest,
+        "license_review": item.get("license_review", "required"),
+        "notice": "Upstream source. Preserve original license and copyright terms."
+    }
+    (destination / MARKER).write_text(json.dumps(marker, indent=2) + "\n", encoding="utf-8")
+    print(f"SNAPSHOTTED {item['name']} commit={actual} tree_sha256={digest} -> {item['destination']}")
 
 
 def verify(item: dict[str, Any]) -> bool:
     destination = ROOT / item["destination"]
-    if not (destination / ".git").is_dir():
-        print(f"MISSING {item['name']}: run vendor_sources.py sync")
+    marker = read_marker(destination)
+    if not marker:
+        print(f"MISSING/INVALID {item['name']}: run vendor_sources.py sync")
         return False
-    try:
-        origin = run(["git", "remote", "get-url", "origin"], cwd=destination)
-        actual = run(["git", "rev-parse", "HEAD"], cwd=destination)
-        dirty = run(["git", "status", "--porcelain"], cwd=destination)
-    except RuntimeError as exc:
-        print(f"ERROR {item['name']}: {exc}")
-        return False
-    ok = (
-        origin.rstrip("/") == item["repository"].rstrip("/")
-        and actual == item["revision"]
-        and not dirty
+    actual_digest = tree_digest(destination)
+    expected = (
+        marker.get("schema_version") == 1
+        and marker.get("name") == item["name"]
+        and marker.get("repository") == item["repository"]
+        and marker.get("revision") == item["revision"]
+        and marker.get("tree_sha256") == actual_digest
     )
-    print(f"{'OK' if ok else 'MISMATCH'} {item['name']} expected={item['revision']} actual={actual} dirty={bool(dirty)}")
-    return ok
+    print(f"{'OK' if expected else 'MISMATCH'} {item['name']} revision={marker.get('revision')} tree_sha256={actual_digest}")
+    return expected
 
 
 def verify_artifact(item: dict[str, Any]) -> bool:
@@ -133,10 +186,9 @@ def main() -> int:
             for item in sources:
                 sync(item)
             if artifacts:
-                print("Binary artifact download is intentionally not implemented here; obtain it through an approved acquisition process, then place it at the manifest destination and run verify.")
+                print("Binary artifact download is intentionally not implemented here; acquire it through an approved process, then place it at the manifest destination and run verify.")
             return 0
         if ns.command == "verify":
-            git_available()
             results = [verify(item) for item in sources]
             results.extend(verify_artifact(item) for item in artifacts)
             return 0 if all(results) else 1
@@ -144,7 +196,7 @@ def main() -> int:
             print(f"SOURCE {item['name']} revision={item['revision']} destination={item['destination']} license_review={item['license_review']}")
         for item in artifacts:
             print(f"ARTIFACT {item['name']} version={item['version']} sha256={item['sha256']} destination={item['destination']} license_review={item['license_review']}")
-        print("Status lists the pinned plan; use verify to check local snapshots.")
+        print("Status lists the pinned plan; use sync to materialize source files and verify to check local snapshots.")
         return 0
     except (OSError, ValueError, json.JSONDecodeError, RuntimeError) as exc:
         print(f"vendor_sources: {exc}", file=sys.stderr)
