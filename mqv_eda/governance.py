@@ -299,3 +299,56 @@ def evaluate_baseline_freshness(baseline: dict[str, Any], current: dict[str, Any
         "blockers": blockers,
         "limitations": ["Freshness metadata does not prove semantic equivalence or correctness of the baseline."],
     }
+
+
+
+def inventory_license_notices(root: Path) -> dict[str, Any]:
+    """Inventory license/notice files and explicit SPDX identifiers without legal inference."""
+    root = Path(root).resolve()
+    if not root.is_dir():
+        raise ValueError(f"License inventory root is not a directory: {root}")
+    candidates: list[dict[str, Any]] = []
+    patterns = ("license", "licence", "copying", "notice", "third_party_notices", "patents")
+    excluded = {".git", ".venv", "venv", "node_modules", "__pycache__"}
+    for path in sorted(root.rglob("*"), key=lambda p: p.relative_to(root).as_posix().casefold()):
+        relative = path.relative_to(root)
+        if any(part in excluded for part in relative.parts):
+            continue
+        if path.is_symlink():
+            raise ValueError(f"Symlink rejected during license inventory: {relative.as_posix()}")
+        if not path.is_file() or not path.name.casefold().startswith(patterns):
+            continue
+        data = path.read_bytes()
+        if len(data) > 2 * 1024 * 1024:
+            candidates.append({
+                "path": relative.as_posix(), "size_bytes": len(data),
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "spdx_identifiers": [], "license_status": "REVIEW_REQUIRED_TOO_LARGE",
+            })
+            continue
+        text_value = data.decode("utf-8", errors="replace")
+        identifiers = sorted(set(
+            line.split("SPDX-License-Identifier:", 1)[1].strip().split()[0]
+            for line in text_value.splitlines()
+            if "SPDX-License-Identifier:" in line
+            and line.split("SPDX-License-Identifier:", 1)[1].strip()
+        ))
+        candidates.append({
+            "path": relative.as_posix(), "size_bytes": len(data),
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "spdx_identifiers": identifiers,
+            "license_status": "SPDX_DECLARED" if identifiers else "MANUAL_REVIEW_REQUIRED",
+        })
+    return {
+        "schema": SCHEMA,
+        "root_label": root.name,
+        "notice_file_count": len(candidates),
+        "spdx_declared_count": sum(item["license_status"] == "SPDX_DECLARED" for item in candidates),
+        "manual_review_count": sum(item["license_status"] != "SPDX_DECLARED" for item in candidates),
+        "files": candidates,
+        "limitations": [
+            "This inventories notice-like filenames; it does not establish complete source coverage.",
+            "SPDX tags are extracted as text and are not legal advice or license compatibility analysis.",
+            "Missing notices or identifiers require human/legal review and do not imply permission to redistribute.",
+        ],
+    }
