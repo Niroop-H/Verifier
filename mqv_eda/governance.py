@@ -235,3 +235,67 @@ def generate_sbom(*, include_environment: bool = True) -> dict[str, Any]:
             "Validate the component section against the official CycloneDX schema before claiming schema conformance.",
         ],
     }
+
+
+def evaluate_baseline_freshness(baseline: dict[str, Any], current: dict[str, Any], *,
+                                max_age_seconds: int = 7 * 24 * 3600,
+                                require_same_revision: bool = True,
+                                now: datetime | None = None) -> dict[str, Any]:
+    """Fail-closed freshness check for report baselines.
+
+    Requires a UTC creation timestamp and run identity. A source revision match is
+    enforced by default. This checks freshness metadata, not semantic equivalence.
+    """
+    if not isinstance(baseline, dict) or not isinstance(current, dict):
+        raise ValueError("baseline and current reports must be JSON objects")
+    if not isinstance(max_age_seconds, int) or isinstance(max_age_seconds, bool) or max_age_seconds < 0:
+        raise ValueError("max_age_seconds must be a non-negative integer")
+    def identity(report: dict[str, Any]) -> dict[str, Any]:
+        metadata = report.get("metadata")
+        value = metadata.get("run_identity") if isinstance(metadata, dict) else None
+        return value if isinstance(value, dict) else {}
+    base_id = identity(baseline)
+    current_id = identity(current)
+    blockers: list[str] = []
+    created = base_id.get("created_utc")
+    age_seconds: float | None = None
+    if not isinstance(created, str):
+        blockers.append("Baseline run identity has no created_utc timestamp")
+    else:
+        try:
+            parsed = datetime.fromisoformat(created.replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                raise ValueError("timezone missing")
+            now_value = now or datetime.now(timezone.utc)
+            if now_value.tzinfo is None:
+                raise ValueError("now must be timezone-aware")
+            age_seconds = (now_value.astimezone(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds()
+            if age_seconds < 0:
+                blockers.append("Baseline timestamp is in the future")
+            elif age_seconds > max_age_seconds:
+                blockers.append(f"Baseline is stale ({int(age_seconds)} seconds old; limit {max_age_seconds})")
+        except (ValueError, OverflowError):
+            blockers.append("Baseline created_utc timestamp is invalid or timezone-naive")
+    base_revision = base_id.get("source_revision")
+    current_revision = current_id.get("source_revision")
+    revision_match: bool | None = None
+    if require_same_revision:
+        if not isinstance(base_revision, str) or not isinstance(current_revision, str):
+            blockers.append("Source revision is missing; cannot establish baseline freshness")
+        else:
+            revision_match = base_revision == current_revision
+            if not revision_match:
+                blockers.append("Baseline source revision differs from current run")
+    return {
+        "schema": SCHEMA,
+        "status": "FRESH" if not blockers else "STALE_OR_UNVERIFIABLE",
+        "fresh": not blockers,
+        "baseline_run_id": base_id.get("run_id"),
+        "baseline_source_revision": base_revision,
+        "current_source_revision": current_revision,
+        "source_revision_match": revision_match,
+        "baseline_age_seconds": age_seconds,
+        "max_age_seconds": max_age_seconds,
+        "blockers": blockers,
+        "limitations": ["Freshness metadata does not prove semantic equivalence or correctness of the baseline."],
+    }
