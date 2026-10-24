@@ -18,6 +18,7 @@ from .operations import (build_provenance, cleanup_workspace, estimate_resources
 from .quality_gates import evaluate_mutation_results, validate_golden_corpus
 from .contracts import cli_contract
 from .history import minimize_failure_cover, regression_history
+from .config_validation import load_and_validate_config
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mqv-eda", description="MAH Quantum Verify local EDA verification runner")
@@ -138,6 +139,10 @@ def build_parser() -> argparse.ArgumentParser:
     minimize = sub.add_parser("minimize-failures", help="Suggest a smaller test subset from failure-ID mappings")
     minimize.add_argument("cases", type=Path)
     minimize.add_argument("--out", type=Path, default=Path("mqv-minimized-tests.json"))
+    validate_config = sub.add_parser("validate-config", help="Validate project inputs and settings before tool execution")
+    validate_config.add_argument("config", type=Path)
+    validate_config.add_argument("source", type=Path)
+    validate_config.add_argument("--out", type=Path, default=Path("mqv-config-validation.json"))
     verify = sub.add_parser("verify", help="Run applicable EDA checks on a project folder or ZIP")
     verify.add_argument("source", type=Path)
     verify.add_argument("--top", help="Explicit RTL top-level module")
@@ -229,7 +234,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, indent=2))
         print(f"Triage evidence: {args.out}")
         return 0
-    if args.command in {"inventory", "run-identity", "policy", "sbom", "flaky", "cluster-failures", "coverage", "evidence-scorecard", "provenance", "approval-record", "validate-waiver", "change-impact", "estimate-resources", "cleanup-workspace", "retention-record", "mutation-score", "golden-corpus", "history", "minimize-failures"}:
+    if args.command in {"inventory", "run-identity", "policy", "sbom", "flaky", "cluster-failures", "coverage", "evidence-scorecard", "provenance", "approval-record", "validate-waiver", "change-impact", "estimate-resources", "cleanup-workspace", "retention-record", "mutation-score", "golden-corpus", "history", "minimize-failures", "validate-config"}:
         try:
             if args.command == "inventory":
                 result = inventory_inputs(args.source)
@@ -285,6 +290,8 @@ def main(argv: list[str] | None = None) -> int:
             elif args.command == "minimize-failures":
                 cases = json.loads(args.cases.read_text(encoding="utf-8"))
                 result = minimize_failure_cover(cases)
+            elif args.command == "validate-config":
+                result = load_and_validate_config(args.config, args.source)
             else:
                 result = record_retention_action(args.path, action=args.action, reason=args.reason,
                     actor=args.actor, retention_until_utc=args.until)
@@ -304,6 +311,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if result["valid"] else 2
         if args.command == "golden-corpus":
             return 0 if result["status"] == "PASS" else 2
+        if args.command == "validate-config":
+            return 0 if result["valid"] else 2
         return 0
     try:
         results = run_project(args.source, args.out, top=args.top, testbenches=args.testbench,
