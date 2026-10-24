@@ -7,7 +7,7 @@ from mqv_eda.contracts import cli_contract
 def test_cli_parser_registers_new_commands():
     parser = build_parser()
     help_text = parser.format_help()
-    for command in ("inventory", "run-identity", "repro-check", "baseline-freshness", "license-inventory", "sign-provenance", "verify-provenance-signature", "policy", "sbom", "flaky",
+    for command in ("inventory", "run-identity", "repro-check", "baseline-freshness", "license-inventory", "sign-provenance", "verify-provenance-signature", "approvals", "policy", "sbom", "flaky",
                     "cluster-failures", "coverage", "evidence-scorecard", "provenance", "jobs", "history", "minimize-failures", "validate-config",
                     "approval-record", "validate-waiver", "change-impact", "estimate-resources",
                     "cleanup-workspace", "retention-record", "mutation-score", "golden-corpus", "waivers"):
@@ -89,3 +89,18 @@ def test_provenance_signing_commands_use_detached_signature_helpers(tmp_path, mo
     verified = json.loads(capsys.readouterr().out)
     assert verified["valid"] is True
     assert verified["verified_artifact"] == "provenance"
+
+
+
+def test_approval_cli_blocks_self_approval(tmp_path, capsys):
+    db = tmp_path / "approvals.sqlite3"
+    code = main([
+        "approvals", "--db", str(db), "create",
+        "--run-id", "run-1", "--report-sha256", "a" * 64,
+        "--actor", "operator", "--role", "release-reviewer",
+        "--decision", "APPROVE", "--rationale", "reviewed",
+        "--run-operator", "operator",
+    ])
+    result = json.loads(capsys.readouterr().out)
+    assert code == 2
+    assert result["status"] == "BLOCKED"
