@@ -10,7 +10,7 @@ def test_cli_parser_registers_new_commands():
     for command in ("inventory", "run-identity", "policy", "sbom", "flaky",
                     "cluster-failures", "coverage", "evidence-scorecard", "provenance", "jobs", "history", "minimize-failures", "validate-config",
                     "approval-record", "validate-waiver", "change-impact", "estimate-resources",
-                    "cleanup-workspace", "retention-record", "mutation-score", "golden-corpus"):
+                    "cleanup-workspace", "retention-record", "mutation-score", "golden-corpus", "waivers"):
         assert command in help_text
 
 
