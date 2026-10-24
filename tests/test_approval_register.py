@@ -37,3 +37,15 @@ def test_approval_register_rejects_invalid_report_digest(tmp_path, digest):
             tmp_path / "approvals.sqlite3", run_id="run", report_sha256=digest,
             actor="reviewer", role="reviewer", decision="APPROVE", rationale="reviewed",
         )
+
+
+
+def test_approval_register_fails_closed_without_policy_author_identity(tmp_path):
+    result = create_approval(
+        tmp_path / "approvals.sqlite3", run_id="run-003", report_sha256="c" * 64,
+        actor="independent-reviewer", role="release-reviewer", decision="APPROVE",
+        rationale="Review requested", run_operator="operator",
+    )
+    assert result["status"] == "BLOCKED"
+    assert any("policy author identity is required" in blocker.lower()
+               for blocker in result["blockers"])
