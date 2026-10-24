@@ -7,7 +7,7 @@ from mqv_eda.contracts import cli_contract
 def test_cli_parser_registers_new_commands():
     parser = build_parser()
     help_text = parser.format_help()
-    for command in ("inventory", "run-identity", "repro-check", "baseline-freshness", "license-inventory", "sign-provenance", "verify-provenance-signature", "approvals", "policy", "sbom", "flaky",
+    for command in ("inventory", "run-identity", "repro-check", "baseline-freshness", "license-inventory", "sign-provenance", "verify-provenance-signature", "approvals", "history-dashboard", "policy", "sbom", "flaky",
                     "cluster-failures", "coverage", "evidence-scorecard", "provenance", "jobs", "history", "minimize-failures", "validate-config",
                     "approval-record", "validate-waiver", "change-impact", "estimate-resources",
                     "cleanup-workspace", "retention-record", "mutation-score", "golden-corpus", "waivers"):
@@ -104,3 +104,24 @@ def test_approval_cli_blocks_self_approval(tmp_path, capsys):
     result = json.loads(capsys.readouterr().out)
     assert code == 2
     assert result["status"] == "BLOCKED"
+
+
+
+def test_history_dashboard_cli_generates_accessible_html(tmp_path, capsys):
+    first = tmp_path / "run-1.json"
+    second = tmp_path / "run-2.json"
+    first.write_text(json.dumps({"overall_status": "PASS", "checks": [
+        {"stage": "lint", "status": "PASS", "duration_seconds": 1.25}
+    ]}))
+    second.write_text(json.dumps({"overall_status": "FAIL", "checks": [
+        {"stage": "simulation", "status": "FAIL", "duration_seconds": 2.5}
+    ]}))
+    output = tmp_path / "dashboard.html"
+    assert main(["history-dashboard", str(first), str(second), "--out", str(output)]) == 0
+    capsys.readouterr()
+    html = output.read_text()
+    assert '<html lang="en">' in html
+    assert "Regression Dashboard" in html
+    assert 'scope="col"' in html and 'scope="row"' in html
+    assert "run-1.json" in html and "run-2.json" in html
+    assert "not sign-off" in html
