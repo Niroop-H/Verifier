@@ -128,14 +128,23 @@ def sync(item: dict[str, Any]) -> None:
             raise RuntimeError(f"{item['name']}: requested {item['revision']}, got {actual}")
         # Populate submodules at the exact gitlink commits recorded by the pinned source.
         run(["git", "submodule", "update", "--init", "--recursive"], cwd=checkout)
-        shutil.copytree(checkout, staged, symlinks=True,
-                        ignore=shutil.ignore_patterns(".git"))
+        excluded = {str(p).replace("\\\\", "/").strip("/") for p in item.get("exclude_paths", [])}
+        def ignore(relative_root: str, names: list[str]) -> set[str]:
+            current = Path(relative_root)
+            ignored: set[str] = set()
+            for name in names:
+                candidate = (current / name).relative_to(checkout).as_posix()
+                if name == ".git" or any(candidate == x or candidate.startswith(x + "/") for x in excluded):
+                    ignored.add(name)
+            return ignored
+        shutil.copytree(checkout, staged, symlinks=True, ignore=ignore)
         digest = tree_digest(staged)
         marker = {
             "schema_version": 1,
             "name": item["name"],
             "repository": item["repository"],
             "revision": item["revision"],
+            "excluded_paths": item.get("exclude_paths", []),
             "tree_sha256": digest,
             "license_review": item.get("license_review", "required"),
             "notice": "Upstream source. Preserve original license and copyright terms."
@@ -157,6 +166,7 @@ def verify(item: dict[str, Any]) -> bool:
         and marker.get("name") == item["name"]
         and marker.get("repository") == item["repository"]
         and marker.get("revision") == item["revision"]
+        and marker.get("excluded_paths", []) == item.get("exclude_paths", [])
         and marker.get("tree_sha256") == actual_digest
     )
     print(f"{'OK' if expected else 'MISMATCH'} {item['name']} revision={marker.get('revision')} tree_sha256={actual_digest}")
