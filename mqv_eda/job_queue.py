@@ -142,3 +142,28 @@ def job_health(database: Path) -> dict[str, Any]:
         return {"queue": "sqlite-local", "durable": True, "distributed": False,
                 "total": total, "counts": counts,
                 "note": "Running jobs require a worker to poll cancel_requested and acknowledge cancellation."}
+
+
+def finish_job(database: Path, job_id: str, *, worker_id: str, state: str,
+               detail: str = "", error: str | None = None) -> dict[str, Any]:
+    """Accept a terminal result only from the worker currently recorded on the job."""
+    if not worker_id or not worker_id.strip():
+        raise ValueError("worker_id must be non-empty")
+    if state not in TERMINAL:
+        raise ValueError("finish state must be terminal")
+    with _connect(database) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute("SELECT state,worker_id FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if row is None:
+            raise ValueError(f"unknown job id: {job_id}")
+        if row["worker_id"] != worker_id:
+            raise ValueError("worker_id does not own this job")
+        old = row["state"]
+        if state not in TRANSITIONS[old]:
+            raise ValueError(f"invalid job transition: {old} -> {state}")
+        now = time.time()
+        conn.execute("""UPDATE jobs SET state=?,updated_at=?,finished_at=?,error=?,
+                        cancel_requested=0,version=version+1 WHERE id=?""",
+                     (state, now, now, error, job_id))
+        _event(conn, job_id, old, state, worker_id, detail or "worker reported terminal result")
+    return get_job(database, job_id)
