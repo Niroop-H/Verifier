@@ -56,8 +56,11 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
-          root = Path("vendor/src")
-          files = [p for p in root.rglob("*") if p.is_file() and not p.is_symlink()]
+          import json
+          pack = "${{ inputs.pack }}"
+          manifest = json.loads(Path("vendor/manifest.json").read_text(encoding="utf-8"))
+          roots = [Path(item["destination"]) for item in manifest["sources"] if item.get("pack") == pack]
+          files = [p for root in roots for p in root.rglob("*") if p.is_file() and not p.is_symlink()]
           total = sum(p.stat().st_size for p in files)
           oversized = [(p, p.stat().st_size) for p in files if p.stat().st_size >= 95 * 1024 * 1024]
           print(f"Vendored files: {len(files):,}")
