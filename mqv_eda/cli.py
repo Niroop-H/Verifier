@@ -19,6 +19,7 @@ from .quality_gates import evaluate_mutation_results, validate_golden_corpus
 from .contracts import cli_contract
 from .history import minimize_failure_cover, regression_history
 from .config_validation import load_and_validate_config
+from .job_queue import enqueue as enqueue_job, get_job, list_jobs, claim_next, cancel_job, transition as transition_job, job_health
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mqv-eda", description="MAH Quantum Verify local EDA verification runner")
@@ -143,6 +144,28 @@ def build_parser() -> argparse.ArgumentParser:
     validate_config.add_argument("config", type=Path)
     validate_config.add_argument("source", type=Path)
     validate_config.add_argument("--out", type=Path, default=Path("mqv-config-validation.json"))
+    jobs = sub.add_parser("jobs", help="Inspect durable local verification jobs")
+    jobs.add_argument("--db", type=Path, default=Path(".mqv/jobs.sqlite3"))
+    jobs.add_argument("--limit", type=int, default=100)
+    jobs_sub = jobs.add_subparsers(dest="jobs_action", required=True)
+    jobs_sub.add_parser("list", help="List recent jobs")
+    jobs_sub.add_parser("health", help="Summarize queue states")
+    job_submit = jobs_sub.add_parser("submit", help="Queue a JSON job payload")
+    job_submit.add_argument("payload", type=Path)
+    job_submit.add_argument("--actor", default="cli")
+    job_show = jobs_sub.add_parser("show", help="Show a job and its event history")
+    job_show.add_argument("job_id")
+    job_cancel = jobs_sub.add_parser("cancel", help="Cancel queued job or request cooperative cancellation")
+    job_cancel.add_argument("job_id")
+    job_cancel.add_argument("--actor", default="cli")
+    job_claim = jobs_sub.add_parser("claim", help="Atomically claim the next queued job for a worker")
+    job_claim.add_argument("--worker-id", required=True)
+    job_finish = jobs_sub.add_parser("finish", help="Record a worker-reported terminal outcome")
+    job_finish.add_argument("job_id")
+    job_finish.add_argument("--worker-id", required=True)
+    job_finish.add_argument("--state", choices=["SUCCEEDED", "FAILED", "CANCELLED"], required=True)
+    job_finish.add_argument("--detail", default="")
+    job_finish.add_argument("--error")
     verify = sub.add_parser("verify", help="Run applicable EDA checks on a project folder or ZIP")
     verify.add_argument("source", type=Path)
     verify.add_argument("--top", help="Explicit RTL top-level module")
@@ -161,6 +184,29 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "jobs":
+        try:
+            if args.jobs_action == "submit":
+                payload = json.loads(args.payload.read_text(encoding="utf-8"))
+                result = enqueue_job(args.db, payload, actor=args.actor)
+            elif args.jobs_action == "show":
+                result = get_job(args.db, args.job_id)
+            elif args.jobs_action == "list":
+                result = {"jobs": list_jobs(args.db, limit=args.limit)}
+            elif args.jobs_action == "health":
+                result = job_health(args.db)
+            elif args.jobs_action == "claim":
+                result = {"job": claim_next(args.db, worker_id=args.worker_id)}
+            elif args.jobs_action == "cancel":
+                result = cancel_job(args.db, args.job_id, actor=args.actor)
+            else:
+                result = transition_job(args.db, args.job_id, args.state, actor=args.worker_id,
+                                        detail=args.detail, error=args.error)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
     if args.command == "contract":
         result = cli_contract()
         rendered = json.dumps(result, indent=2, sort_keys=True)
