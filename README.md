@@ -44,6 +44,13 @@ python -m mqv_eda verify fixtures/projects/good --top comb --testbench tb_comb.v
 
 EDA executables must be installed and available on PATH for their corresponding flows. See [Linux build instructions](docs/BUILD_LINUX.md) and `python -m mqv_eda --help` for current options.
 
+## Product differentiation and customer trust
+
+- [Customer choice and competitive advantage backlog](docs/CUSTOMER_CHOICE_AND_COMPETITIVE_ADVANTAGE.md): measurable differentiators, customer value metrics, defence-oriented requirements, and release gates.
+- [Differentiation and defence readiness plan](docs/DIFFERENTIATION_AND_DEFENCE_READINESS.md): data custody, security, supply-chain transparency, pilot criteria, and claims boundaries.
+
+These documents describe implementation targets and acceptance criteria. They are not claims that all listed features, security controls, certifications, or defence approvals are already complete.
+
 ## Current implementation areas
 
 - Controlled ZIP extraction with traversal and archive-size protections.
