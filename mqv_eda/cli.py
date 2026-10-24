@@ -12,7 +12,7 @@ from .tool_catalog import list_tool_catalog
 from .report_analysis import compare_reports, triage_log, write_json
 from .evidence_bundle import create_bundle, verify_bundle
 from .evidence_signing import sign_bundle, verify_bundle_signature
-from .governance import create_run_identity, evaluate_policy, generate_sbom, inventory_inputs, evaluate_baseline_freshness
+from .governance import create_run_identity, evaluate_policy, generate_sbom, inventory_inputs, evaluate_baseline_freshness, inventory_license_notices
 from .regression_intelligence import cluster_failures, detect_flaky_runs, ingest_cobertura_coverage
 from .operations import (build_provenance, cleanup_workspace, estimate_resources, evaluate_approval, evidence_scorecard, map_change_impact, record_retention_action, apply_retention_action, validate_waiver)
 from .quality_gates import evaluate_mutation_results, validate_golden_corpus
@@ -78,6 +78,9 @@ def build_parser() -> argparse.ArgumentParser:
     baseline.add_argument("--allow-revision-change", action="store_true")
     baseline.add_argument("--out", type=Path, default=Path("mqv-baseline-freshness.json"))
     sbom = sub.add_parser("sbom", help="Generate a dependency inventory for the active Python environment")
+    license_inventory = sub.add_parser("license-inventory", help="Inventory license and notice files without inferring redistribution rights")
+    license_inventory.add_argument("root", type=Path)
+    license_inventory.add_argument("--out", type=Path, default=Path("mqv-license-inventory.json"))
     sbom.add_argument("--out", type=Path, default=Path("mqv-sbom.json"))
     flaky = sub.add_parser("flaky", help="Compare repeated reports for outcome variation")
     flaky.add_argument("reports", nargs="+", type=Path)
@@ -377,7 +380,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, indent=2))
         print(f"Triage evidence: {args.out}")
         return 0
-    if args.command in {"inventory", "run-identity", "baseline-freshness", "policy", "sbom", "flaky", "cluster-failures", "coverage", "evidence-scorecard", "provenance", "approval-record", "validate-waiver", "change-impact", "estimate-resources", "cleanup-workspace", "retention-record", "mutation-score", "golden-corpus", "history", "minimize-failures", "validate-config"}:
+    if args.command in {"inventory", "run-identity", "baseline-freshness", "license-inventory", "policy", "sbom", "flaky", "cluster-failures", "coverage", "evidence-scorecard", "provenance", "approval-record", "validate-waiver", "change-impact", "estimate-resources", "cleanup-workspace", "retention-record", "mutation-score", "golden-corpus", "history", "minimize-failures", "validate-config"}:
         try:
             if args.command == "inventory":
                 result = inventory_inputs(args.source)
@@ -398,6 +401,8 @@ def main(argv: list[str] | None = None) -> int:
                 report = json.loads(args.report.read_text(encoding="utf-8"))
                 policy_doc = json.loads(args.policy_file.read_text(encoding="utf-8"))
                 result = evaluate_policy(report, policy_doc, dry_run=args.dry_run)
+            elif args.command == "license-inventory":
+                result = inventory_license_notices(args.root)
             elif args.command == "sbom":
                 result = generate_sbom()
             elif args.command == "flaky":
