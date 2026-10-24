@@ -57,7 +57,7 @@ This tracker separates code that exists from complete acceptance of the original
 | 40 | Incident-ready execution record | Partial | Persist termination causes, resource-limit events and worker identity |
 | 41 | Stable CLI contract | Partial | Normalize legacy output envelopes and lock down every exit code in tests |
 | 42 | API schema and compatibility policy | Partial | Reference OpenAPI contract exists; an authenticated API server is not implemented |
-| 43 | Queue and cancellation semantics | Partial | Implement real job lifecycle, queue persistence and cancellation handling |
+| 43 | Queue and cancellation semantics | Partial | SQLite-backed durable local lifecycle, atomic claim, event history and cooperative cancellation are implemented; still needs worker orchestration, lease recovery, multi-host queue and API integration |
 | 44 | Resource budget estimation | Partial | Calibrate estimates from measured history while retaining hard limits |
 | 45 | Artifact retention and cleanup | Partial | Integrate cleanup with worker lifecycle and retention enforcement |
 | 46 | Configuration validation | Partial | Integrate preflight validation into every run path and revalidate at execution time |
@@ -77,3 +77,16 @@ The branch includes commands for input inventory, run identity, policy evaluatio
 - The failure minimizer suggests a subset from supplied failure mappings; it does not rerun tests to prove reproduction.
 - The OpenAPI file is a reference contract, not a running API service.
 - No result from this tracker constitutes fabrication readiness, safety certification, or defence certification.
+
+## Job lifecycle implementation added
+
+The `mqv_eda.job_queue` module now provides a SQLite-backed, single-host queue with:
+- durable job records and ordered state-transition events;
+- atomic queued-job claims using SQLite write transactions;
+- explicit state-transition validation and terminal-state protection;
+- queued cancellation and cooperative cancellation requests for running work;
+- list, inspect and queue-health operations.
+
+CLI entry point: `python -m mqv_eda jobs --db .mqv/jobs.sqlite3 <list|health|submit|show|claim|cancel|finish>`.
+
+This is **not yet a distributed queue or a complete background execution service**. A worker must poll a running job's `cancel_requested` field and acknowledge cancellation. The CLI's `finish` command records a worker-reported outcome; it does not itself execute or terminate an EDA process. SQLite is appropriate for a local/single-host prototype, not multi-host production scheduling.
