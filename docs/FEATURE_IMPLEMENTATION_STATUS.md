@@ -114,3 +114,8 @@ The generated HTML report now provides a semantic run-summary section, check cou
 ## Latest incremental implementation — broader SBOM inventory
 
 The SBOM output now includes a separate native EDA-tool inventory for configured tool adapters, reporting executable lookup state, resolved path, declared purpose, tier, and integration level. It explicitly leaves version and trust status unverified instead of implying that a PATH hit is a trusted toolchain attestation. Python package inventory remains available. Full native binary hashes, OS package inventory, proprietary tool metadata, PDK inventory, and official CycloneDX schema validation are still outstanding.
+
+
+## Latest incremental implementation — job ownership check
+
+The local queue now rejects terminal job completion reports unless the supplied worker ID matches the worker recorded when the job was claimed. This prevents accidental or naive cross-worker completion in the local queue API and is covered by a regression test. Worker IDs remain caller-supplied labels, not cryptographically authenticated identities; a trusted worker service and lease/recovery protocol are still required for hostile or multi-tenant environments.
