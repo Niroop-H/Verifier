@@ -17,6 +17,7 @@ COMMANDS = {
     "license-inventory": {"inventory_written": 0, "invalid_or_error": 2},
     "jobs run-once": {"job_executed": 0, "idle_or_no_queued_job": 0, "execution_error": 2},
     "approval-record": {"approved": 0, "not_approved_or_blocked": 2},
+    "approvals create": {"approved_or_rejected": 0, "separation_of_duties_blocked": 2, "invalid_input": 2},
     "bundle": {"verified_or_created": 0, "invalid_or_error": 2},
     "verify-evidence-signature": {"valid": 0, "invalid_or_error": 2},
     "sign-provenance": {"signature_written": 0, "invalid_or_error": 2},
