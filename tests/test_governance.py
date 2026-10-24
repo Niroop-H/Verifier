@@ -166,6 +166,6 @@ def test_inventory_reports_include_dependencies_and_missing_headers(tmp_path):
 def test_inventory_flags_include_outside_project_root(tmp_path):
     outside = tmp_path.parent / (tmp_path.name + "-outside.svh")
     outside.write_text("`define SECRET 1\n")
-    (tmp_path / "top.sv").write_text(f'`include "{outside.name}"\n')
+    (tmp_path / "top.sv").write_text(f'`include "{outside.as_posix()}"\n')
     result = inventory_inputs(tmp_path)
     assert result["unresolved_includes"][0]["reason"] == "include resolves outside the project root"
