@@ -30,8 +30,13 @@ jobs:
           python -m pip install pyinstaller==6.11.1
 
       - name: Build standalone Windows executable
+        shell: pwsh
         run: |
-          pyinstaller --noconfirm --clean --onefile --console --name MQV-EDA --collect-submodules mqv_eda mqv_eda/__main__.py
+          @'
+          from mqv_eda.cli import main
+          raise SystemExit(main())
+          '@ | Set-Content -Encoding utf8 .\\mqv_eda_entry.py
+          pyinstaller --noconfirm --clean --onefile --console --name MQV-EDA --collect-submodules mqv_eda .\\mqv_eda_entry.py
 
       - name: Smoke-test executable
         shell: pwsh
