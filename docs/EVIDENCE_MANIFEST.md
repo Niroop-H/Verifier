@@ -1,6 +1,6 @@
 # Evidence manifest and integrity checks
 
-Every `mqv-eda verify` run writes an `evidence-manifest.json` alongside `report.json` and `report.html`. The manifest records each check's status, required/optional flag, message, exit code, tool version, duration, known input hashes, and captured log digest/size when available.
+Every `mqv-eda verify` run writes an `evidence-manifest.json` alongside `report.json` and `report.html`. The manifest records each check's status, required/optional flag, message, start timestamp, exit code, tool version, duration, known input hashes, a redacted command, a SHA-256 fingerprint of the exact command arguments, and captured log digest/size when available. Absolute command paths are reduced to relative paths within the bundle or basenames for external files.
 
 ## Create a portable evidence bundle
 
@@ -28,6 +28,7 @@ Exit codes are `0` when all referenced evidence is present and matches, `1` when
 
 - The manifest records both the digest captured by the check and the observed digest at manifest generation time when the source remains available. Differences indicate that the source may have changed during the run and cause integrity verification to fail.
 - Missing or unreadable files, unsafe paths, hash mismatches and external unbundled inputs prevent an overall integrity PASS.
+- The command fingerprint lets reviewers compare exact command arguments without disclosing host-specific absolute paths in the manifest. The redacted command is for human review and may not be directly executable as written. A fingerprint is not a signature or proof that the command was actually executed.
 - A green integrity result means only that the bundled referenced files matched the hashes recorded in the manifest. It does not prove the manifest itself is authentic, that the execution host or tools were trusted, that tests were complete, that the RTL is correct, or that a design is ready for fabrication.
 - For evidence exchange, package the manifest and every referenced file in a stable directory layout. Keep signed attestations and independently controlled, append-only storage as separate future controls; this feature is not a digital signature.
 
