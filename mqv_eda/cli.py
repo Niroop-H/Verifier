@@ -205,6 +205,22 @@ def build_parser() -> argparse.ArgumentParser:
     waiver_revoke.add_argument("waiver_id")
     waiver_revoke.add_argument("--actor", required=True)
     waiver_revoke.add_argument("--reason", required=True)
+    approvals = sub.add_parser("approvals", help="Record and inspect durable local review decisions")
+    approvals.add_argument("--db", type=Path, default=Path(".mqv/approvals.sqlite3"))
+    approvals_sub = approvals.add_subparsers(dest="approvals_action", required=True)
+    approvals_sub.add_parser("list", help="List recorded approval decisions")
+    approval_show = approvals_sub.add_parser("show", help="Show an approval decision and audit events")
+    approval_show.add_argument("approval_id")
+    approval_create = approvals_sub.add_parser("create", help="Record a decision against a report hash")
+    approval_create.add_argument("--run-id", required=True)
+    approval_create.add_argument("--report-sha256", required=True)
+    approval_create.add_argument("--actor", required=True)
+    approval_create.add_argument("--role", required=True)
+    approval_create.add_argument("--decision", choices=["APPROVE", "REJECT"], required=True)
+    approval_create.add_argument("--rationale", required=True)
+    approval_create.add_argument("--run-operator")
+    approval_create.add_argument("--policy-author")
+    approval_create.add_argument("--allow-self-approval", action="store_true")
     verify = sub.add_parser("verify", help="Run applicable EDA checks on a project folder or ZIP")
     verify.add_argument("source", type=Path)
     verify.add_argument("--top", help="Explicit RTL top-level module")
@@ -231,6 +247,26 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "approvals":
+        try:
+            if args.approvals_action == "create":
+                result = create_approval(
+                    args.db, run_id=args.run_id, report_sha256=args.report_sha256,
+                    actor=args.actor, role=args.role, decision=args.decision, rationale=args.rationale,
+                    run_operator=args.run_operator, policy_author=args.policy_author,
+                    require_separation=not args.allow_self_approval,
+                )
+            elif args.approvals_action == "show":
+                result = get_approval(args.db, args.approval_id)
+            else:
+                result = {"approvals": list_approvals(args.db)}
+        except (OSError, ValueError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2, sort_keys=True))
+        if args.approvals_action == "create" and result.get("status") == "BLOCKED":
+            return 2
+        return 0
     if args.command == "waivers":
         try:
             if args.waivers_action == "create":
