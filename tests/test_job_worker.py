@@ -1,7 +1,7 @@
 import json
 
 from mqv_eda import cli
-from mqv_eda.job_queue import enqueue_job
+from mqv_eda.job_queue import enqueue
 from mqv_eda.models import CheckResult, Status
 
 
@@ -11,7 +11,7 @@ def test_run_once_executes_queued_verification_and_persists_evidence(tmp_path, m
     source.mkdir()
     (source / "top.v").write_text("module top; endmodule\n")
     output = tmp_path / "job-output"
-    job = enqueue_job(db, {"source": str(source), "output_dir": str(output), "top": "top"})
+    job = enqueue(db, {"source": str(source), "output_dir": str(output), "top": "top"})
     monkeypatch.setattr(cli, "run_project", lambda *a, **k: [
         CheckResult("lint", Status.PASS, "No issues", required=True)
     ])
