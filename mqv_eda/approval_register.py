@@ -43,6 +43,15 @@ def _render(conn: sqlite3.Connection, approval_id: str) -> dict[str, Any]:
         "SELECT at,action,actor,detail FROM approval_events WHERE approval_id=? ORDER BY seq",
         (approval_id,),
     )]
+    result["status"] = result["decision"]
+    result["blockers"] = []
+    if result["events"]:
+        try:
+            decision_detail = json.loads(result["events"][-1]["detail"])
+            result["status"] = decision_detail.get("status", result["decision"])
+            result["blockers"] = decision_detail.get("blockers", [])
+        except (ValueError, TypeError):
+            pass
     return result
 
 
