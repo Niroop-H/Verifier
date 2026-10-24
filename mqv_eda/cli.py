@@ -58,6 +58,17 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument("--lvs-netlist", type=Path, help="Reference source netlist for LVS")
     verify.add_argument("--out", type=Path, default=Path("mqv-report"))
     verify.add_argument("--timeout", type=float, default=120)
+    verify.add_argument(
+        "--bundle-inputs",
+        action="store_true",
+        help="Copy known external input files into the evidence bundle; use only when you are authorized to duplicate this design collateral",
+    )
+    verify.add_argument(
+        "--max-bundle-mb",
+        type=int,
+        default=100,
+        help="Maximum total bytes of copied external inputs in MiB when --bundle-inputs is enabled (default: 100)",
+    )
 
     integrity = sub.add_parser(
         "verify-evidence", help="Verify hashes in a previously generated evidence manifest",
@@ -99,6 +110,10 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(report, indent=2))
         return 0 if report["integrity_status"] == "PASS" else 1
 
+    if args.max_bundle_mb < 0:
+        print("ERROR: --max-bundle-mb must be zero or greater.", file=sys.stderr)
+        return 2
+
     try:
         results = run_project(
             args.source,
@@ -117,7 +132,13 @@ def main(argv: list[str] | None = None) -> int:
         )
         metadata = {"source": str(args.source.resolve()), "top": args.top}
         paths = write_reports(args.out, results, metadata)
-        manifest = build_evidence_manifest(args.out, results, metadata)
+        manifest = build_evidence_manifest(
+            args.out,
+            results,
+            metadata,
+            bundle_inputs=args.bundle_inputs,
+            max_bundle_bytes=args.max_bundle_mb * 1024 * 1024,
+        )
         manifest_path = args.out / "evidence-manifest.json"
         manifest_path.write_text(
             json.dumps(manifest, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
