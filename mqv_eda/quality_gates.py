@@ -81,7 +81,12 @@ def validate_golden_corpus(root: Path, manifest_path: Path) -> dict[str, Any]:
         seen.add(path_text)
         if not isinstance(expected, str) or not expected.strip():
             issues.append(f"{path_text}: expected_outcome is missing")
-        path = (root / path_text).resolve()
+        original_path = root / path_text
+        if original_path.is_symlink():
+            issues.append(f"{path_text}: symlink fixtures are not accepted")
+            rows.append({"path": path_text, "status": "MISSING_OR_INVALID"})
+            continue
+        path = original_path.resolve()
         if not path.is_relative_to(root):
             issues.append(f"{path_text}: path escapes corpus root")
             continue
