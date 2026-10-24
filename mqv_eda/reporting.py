@@ -69,7 +69,7 @@ footer{margin-top:28px;color:#4b5563;font-size:.95rem}
 <section class="summary" aria-labelledby="run-summary-heading">
 <h2 id="run-summary-heading">Run summary</h2>
 <p><strong>Overall status: """ + html.escape(summary.value) + """</strong></p>
-<p>Generated (UTC): <time datetime="""" + html.escape(document["generated_utc"]) + """">""" + html.escape(document["generated_utc"]) + """</time></p>
+<p>Generated (UTC): """ + html.escape(document["generated_utc"]) + """</p>
 <ul class="counts" aria-label="Check counts">""" + count_items + """</ul>
 </section>
 <table>
