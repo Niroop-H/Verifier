@@ -104,3 +104,8 @@ This is a local governance primitive, not a trusted authorization service: actor
 The retention CLI now supports a dry-run by default and an explicit `--execute` switch. File archive operations require a new destination and verify the copied SHA-256 digest. File deletion requires `--confirm-sha256` matching the current source digest. Symlinks and directories are rejected. Automated tests cover dry-run behavior, verified archive copies, digest-gated deletion, destination collision, and symlink/directory rejection.
 
 This is not yet a complete retention service: there is no scheduler, immutable external audit store, multi-user authorization, directory-level retention policy, or legal hold workflow. Use deletion only on dedicated, backed-up evidence paths.
+
+
+## Latest incremental implementation — accessible evidence report
+
+The generated HTML report now provides a semantic run-summary section, check counts, table caption and scoped headers, responsive layout, visible keyboard focus, print styling, and escaped user/tool text. A regression test checks those properties. This improves the accessible report artifact; it does not constitute a full interactive dashboard or a formal WCAG conformance audit.
