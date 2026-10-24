@@ -147,3 +147,25 @@ def test_license_notice_inventory_rejects_symlinks(tmp_path):
     (tmp_path / "LICENSE-link").symlink_to(tmp_path / "LICENSE")
     with pytest.raises(ValueError, match="Symlink rejected"):
         inventory_license_notices(tmp_path)
+
+
+def test_inventory_reports_include_dependencies_and_missing_headers(tmp_path):
+    (tmp_path / "rtl").mkdir()
+    (tmp_path / "rtl" / "include").mkdir()
+    (tmp_path / "rtl" / "top.sv").write_text('`include "include/defs.svh"\\nmodule top; endmodule\\n')
+    (tmp_path / "rtl" / "include" / "defs.svh").write_text('`define WIDTH 8\\n')
+    result = inventory_inputs(tmp_path)
+    assert {"source": "rtl/top.sv", "target": "rtl/include/defs.svh"} in result["include_dependencies"]
+    assert result["unresolved_includes"] == []
+    (tmp_path / "rtl" / "top.sv").write_text('`include "missing.svh"\\nmodule top; endmodule\\n')
+    result_missing = inventory_inputs(tmp_path)
+    assert result_missing["unresolved_includes"][0]["include"] == "missing.svh"
+    assert result_missing["input_fingerprint_sha256"] != result["input_fingerprint_sha256"]
+
+
+def test_inventory_flags_include_outside_project_root(tmp_path):
+    outside = tmp_path.parent / (tmp_path.name + "-outside.svh")
+    outside.write_text("`define SECRET 1\\n")
+    (tmp_path / "top.sv").write_text(f'`include "{outside.name}"\\n')
+    result = inventory_inputs(tmp_path)
+    assert result["unresolved_includes"][0]["reason"] == "include resolves outside the project root"

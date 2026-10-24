@@ -50,3 +50,36 @@ def test_bundle_rejects_traversal_member(tmp_path):
     result=verify_bundle(bad)
     assert result["status"] == "INVALID"
     assert any("Unsafe" in p for p in result["problems"])
+
+
+def test_bundle_creation_is_reproducible_for_same_evidence(tmp_path):
+    source = tmp_path / "evidence"
+    source.mkdir()
+    (source / "report.json").write_text('{"status":"PASS"}')
+    (source / "logs").mkdir()
+    (source / "logs" / "run.log").write_text("finished\\n")
+    first = tmp_path / "first.zip"
+    second = tmp_path / "second.zip"
+    create_bundle(source, first, metadata={"project": "fixture"})
+    create_bundle(source, second, metadata={"project": "fixture"})
+    assert first.read_bytes() == second.read_bytes()
+
+
+def test_bundle_rejects_manifest_total_size_tampering(tmp_path):
+    source = tmp_path / "evidence"
+    source.mkdir()
+    (source / "report.json").write_text("abc")
+    bundle = tmp_path / "bundle.zip"
+    create_bundle(source, bundle)
+    changed = tmp_path / "changed.zip"
+    with zipfile.ZipFile(bundle) as zin, zipfile.ZipFile(changed, "w") as zout:
+        for info in zin.infolist():
+            data = zin.read(info.filename)
+            if info.filename == MANIFEST_NAME:
+                manifest = json.loads(data)
+                manifest["total_uncompressed_bytes"] += 10
+                data = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode()
+            zout.writestr(info, data)
+    result = verify_bundle(changed)
+    assert result["status"] == "INVALID"
+    assert any("total_uncompressed_bytes" in problem for problem in result["problems"])

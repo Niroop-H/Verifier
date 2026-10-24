@@ -78,9 +78,19 @@ def create_bundle(source: Path, output: Path, *, metadata: dict[str, Any] | None
     }
     output.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6, allowZip64=True) as archive:
+        # Fixed ZIP metadata makes identical evidence content produce identical
+        # archive bytes across runs (subject to the same Python/zlib behavior).
         for path in files:
-            archive.write(path, arcname=path.relative_to(source).as_posix())
-        archive.writestr(MANIFEST_NAME, json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+            name = path.relative_to(source).as_posix()
+            info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o100644 << 16
+            archive.writestr(info, path.read_bytes(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=6)
+        manifest_info = zipfile.ZipInfo(MANIFEST_NAME, date_time=(1980, 1, 1, 0, 0, 0))
+        manifest_info.compress_type = zipfile.ZIP_DEFLATED
+        manifest_info.external_attr = 0o100644 << 16
+        archive.writestr(manifest_info, json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+                         compress_type=zipfile.ZIP_DEFLATED, compresslevel=6)
     return {"archive": str(output), "sha256": _sha256(output), "file_count": len(entries),
             "total_uncompressed_bytes": total, "manifest": manifest}
 
@@ -137,6 +147,14 @@ def verify_bundle(bundle: Path) -> dict[str, Any]:
                 checked += 1
             if manifest.get("file_count") != len(declared):
                 problems.append("Manifest file_count does not match files array")
+            declared_total = sum(entry.get("size_bytes", -1) for entry in declared
+                                 if isinstance(entry, dict) and isinstance(entry.get("size_bytes"), int))
+            if manifest.get("total_uncompressed_bytes") != declared_total:
+                problems.append("Manifest total_uncompressed_bytes does not match declared file sizes")
+            archive_total = sum(info.file_size for info in infos
+                                if not info.is_dir() and info.filename != MANIFEST_NAME)
+            if manifest.get("total_uncompressed_bytes") != archive_total:
+                problems.append("Manifest total_uncompressed_bytes does not match archive contents")
     except (OSError, zipfile.BadZipFile, json.JSONDecodeError, KeyError, RuntimeError, ValueError) as exc:
         return {"schema": BUNDLE_SCHEMA, "status": "INVALID", "checked_files": checked,
                 "problems": problems + [str(exc)], "archive_sha256": _sha256(bundle) if bundle.is_file() else None}

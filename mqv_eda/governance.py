@@ -55,6 +55,7 @@ def inventory_inputs(root: Path, *, exclude_dirs: tuple[str, ...] = (
     if not root.is_dir():
         raise ValueError(f"Input root is not a directory: {root}")
     entries: list[dict[str, Any]] = []
+    indexed_paths: dict[str, Path] = {}
     for path in sorted(root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()):
         relative = path.relative_to(root)
         if any(part in exclude_dirs for part in relative.parts):
@@ -63,12 +64,49 @@ def inventory_inputs(root: Path, *, exclude_dirs: tuple[str, ...] = (
             raise ValueError(f"Symlink input rejected: {relative.as_posix()}")
         if not path.is_file():
             continue
+        rel = relative.as_posix()
+        indexed_paths[rel] = path
         entries.append({
-            "path": relative.as_posix(),
+            "path": rel,
             "size_bytes": path.stat().st_size,
             "sha256": sha256_file(path),
         })
-    canonical = json.dumps(entries, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+    # Record quoted Verilog/SystemVerilog include dependencies explicitly.
+    import re
+    include_pattern = re.compile(r'(?m)^\\s*`include\\s+"([^"]+)"')
+    include_edges: list[dict[str, str]] = []
+    unresolved_includes: list[dict[str, str]] = []
+    for relative, path in indexed_paths.items():
+        if path.suffix.lower() not in {".v", ".sv", ".vh", ".svh"}:
+            continue
+        try:
+            source_text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            unresolved_includes.append({"source": relative, "include": "<unreadable>", "reason": str(exc)})
+            continue
+        for include_name in include_pattern.findall(source_text):
+            candidate = (path.parent / include_name).resolve()
+            try:
+                rel_target = candidate.relative_to(root).as_posix()
+            except ValueError:
+                unresolved_includes.append({"source": relative, "include": include_name,
+                                            "reason": "include resolves outside the project root"})
+                continue
+            if candidate.is_symlink():
+                raise ValueError(f"Symlink include rejected: {rel_target}")
+            if not candidate.is_file():
+                unresolved_includes.append({"source": relative, "include": include_name,
+                                            "reason": "include file not found"})
+                continue
+            include_edges.append({"source": relative, "target": rel_target})
+
+    include_edges.sort(key=lambda item: (item["source"], item["target"]))
+    unresolved_includes.sort(key=lambda item: (item["source"], item["include"], item["reason"]))
+    canonical = json.dumps(
+        {"files": entries, "include_edges": include_edges, "unresolved_includes": unresolved_includes},
+        sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
     fingerprint = hashlib.sha256(canonical).hexdigest()
     return {
         "schema": SCHEMA,
@@ -76,10 +114,13 @@ def inventory_inputs(root: Path, *, exclude_dirs: tuple[str, ...] = (
         "file_count": len(entries),
         "total_bytes": sum(item["size_bytes"] for item in entries),
         "files": entries,
+        "include_dependencies": include_edges,
+        "unresolved_includes": unresolved_includes,
         "input_fingerprint_sha256": fingerprint,
         "limitations": [
             "This is a filesystem snapshot, not proof of a clean Git worktree.",
             "Excluded directories are not represented in the fingerprint.",
+            "The include scan recognizes quoted Verilog/SystemVerilog include directives only; macro-generated paths and tool-specific include search paths require explicit configuration.",
             "A hash does not prove the design or tool output is correct.",
         ],
     }
