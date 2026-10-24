@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from mqv_eda.governance import create_run_identity, evaluate_policy, generate_sbom, inventory_inputs
+from mqv_eda.governance import evaluate_baseline_freshness, create_run_identity, evaluate_policy, generate_sbom, inventory_inputs
 
 
 def test_inventory_fingerprint_changes_when_input_changes(tmp_path):
@@ -83,3 +83,42 @@ def test_sbom_marks_unknown_license_instead_of_assuming_permission():
 def test_inventory_is_json_serializable(tmp_path):
     (tmp_path / "x.txt").write_text("x")
     json.dumps(inventory_inputs(tmp_path))
+
+
+
+def test_baseline_freshness_requires_recent_timestamp_and_matching_revision():
+    from datetime import datetime, timezone
+
+    now = datetime(2026, 10, 24, tzinfo=timezone.utc)
+    baseline = {"metadata": {"run_identity": {
+        "run_id": "baseline-1", "created_utc": "2026-10-23T00:00:00+00:00",
+        "source_revision": "abc123",
+    }}}
+    current = {"metadata": {"run_identity": {"source_revision": "abc123"}}}
+    result = evaluate_baseline_freshness(baseline, current, max_age_seconds=3 * 86400, now=now)
+    assert result["fresh"] is True
+    assert result["source_revision_match"] is True
+
+    stale = evaluate_baseline_freshness(baseline, current, max_age_seconds=3600, now=now)
+    assert stale["fresh"] is False
+    assert any("stale" in reason.lower() for reason in stale["blockers"])
+
+    changed = {"metadata": {"run_identity": {"source_revision": "def456"}}}
+    changed_result = evaluate_baseline_freshness(baseline, changed, now=now)
+    assert changed_result["fresh"] is False
+    assert any("revision differs" in reason.lower() for reason in changed_result["blockers"])
+
+
+def test_baseline_freshness_blocks_missing_identity_and_future_timestamps():
+    from datetime import datetime, timezone
+
+    now = datetime(2026, 10, 24, tzinfo=timezone.utc)
+    missing = evaluate_baseline_freshness({}, {}, now=now)
+    assert missing["status"] == "STALE_OR_UNVERIFIABLE"
+    future = {"metadata": {"run_identity": {
+        "created_utc": "2026-10-25T00:00:00+00:00", "source_revision": "abc"
+    }}}
+    current = {"metadata": {"run_identity": {"source_revision": "abc"}}}
+    result = evaluate_baseline_freshness(future, current, now=now)
+    assert not result["fresh"]
+    assert any("future" in reason.lower() for reason in result["blockers"])
