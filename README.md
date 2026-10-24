@@ -42,6 +42,8 @@ python -m mqv_eda tool-catalog
 python -m mqv_eda pdks
 python -m mqv_eda verify fixtures/projects/good --top comb --testbench tb_comb.v --sim-top tb_comb --out build/demo
 python -m mqv_eda verify-evidence build/demo/evidence-manifest.json
+# Optional: add --bundle-inputs only when authorized to copy source collateral
+python -m mqv_eda verify-evidence build/demo/evidence-manifest.json
 ```
 
 EDA executables must be installed and available on PATH for their corresponding flows. See [Linux build instructions](docs/BUILD_LINUX.md) and `python -m mqv_eda --help` for current options.
