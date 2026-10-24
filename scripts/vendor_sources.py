@@ -114,10 +114,11 @@ def sync(item: dict[str, Any]) -> None:
             raise RuntimeError(f"Refusing to overwrite unrecognized or differently pinned directory: {destination}")
         if marker.get("tree_sha256") != tree_digest(destination):
             raise RuntimeError(f"Refusing to overwrite modified source snapshot: {destination}")
-        shutil.rmtree(destination)
 
     with tempfile.TemporaryDirectory(prefix="mqv-vendor-") as temporary:
-        checkout = Path(temporary) / "checkout"
+        temporary_root = Path(temporary)
+        checkout = temporary_root / "checkout"
+        staged = temporary_root / "snapshot"
         run(["git", "clone", "--no-checkout", item["repository"], str(checkout)])
         # Explicitly request the full commit so it is not dependent on the default branch name.
         run(["git", "fetch", "origin", item["revision"]], cwd=checkout)
@@ -125,22 +126,23 @@ def sync(item: dict[str, Any]) -> None:
         actual = run(["git", "rev-parse", "HEAD"], cwd=checkout)
         if actual != item["revision"]:
             raise RuntimeError(f"{item['name']}: requested {item['revision']}, got {actual}")
-        shutil.copytree(checkout, destination, symlinks=True,
+        shutil.copytree(checkout, staged, symlinks=True,
                         ignore=shutil.ignore_patterns(".git"))
-    digest = tree_digest(destination)
-    marker = {
-        "schema_version": 1,
-        "name": item["name"],
-        "repository": item["repository"],
-        "revision": item["revision"],
-        "tree_sha256": digest,
-        "license_review": item.get("license_review", "required"),
-        "notice": "Upstream source. Preserve original license and copyright terms."
-    }
-    (destination / MARKER).write_text(json.dumps(marker, indent=2) + "\n", encoding="utf-8")
+        digest = tree_digest(staged)
+        marker = {
+            "schema_version": 1,
+            "name": item["name"],
+            "repository": item["repository"],
+            "revision": item["revision"],
+            "tree_sha256": digest,
+            "license_review": item.get("license_review", "required"),
+            "notice": "Upstream source. Preserve original license and copyright terms."
+        }
+        (staged / MARKER).write_text(json.dumps(marker, indent=2) + "\\n", encoding="utf-8")
+        if destination.exists():
+            shutil.rmtree(destination)
+        shutil.move(str(staged), str(destination))
     print(f"SNAPSHOTTED {item['name']} commit={actual} tree_sha256={digest} -> {item['destination']}")
-
-
 def verify(item: dict[str, Any]) -> bool:
     destination = ROOT / item["destination"]
     marker = read_marker(destination)
