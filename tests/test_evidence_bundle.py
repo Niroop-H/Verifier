@@ -57,7 +57,7 @@ def test_bundle_creation_is_reproducible_for_same_evidence(tmp_path):
     source.mkdir()
     (source / "report.json").write_text('{"status":"PASS"}')
     (source / "logs").mkdir()
-    (source / "logs" / "run.log").write_text("finished\\n")
+    (source / "logs" / "run.log").write_text("finished\n")
     first = tmp_path / "first.zip"
     second = tmp_path / "second.zip"
     create_bundle(source, first, metadata={"project": "fixture"})
