@@ -18,6 +18,8 @@ COMMANDS = {
     "approval-record": {"approved": 0, "not_approved_or_blocked": 2},
     "bundle": {"verified_or_created": 0, "invalid_or_error": 2},
     "verify-evidence-signature": {"valid": 0, "invalid_or_error": 2},
+    "sign-provenance": {"signature_written": 0, "invalid_or_error": 2},
+    "verify-provenance-signature": {"valid": 0, "invalid_or_error": 2},
     "golden-corpus": {"valid": 0, "invalid": 2},
 }
 
