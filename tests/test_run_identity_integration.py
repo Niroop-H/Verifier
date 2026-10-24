@@ -20,6 +20,9 @@ def test_verify_report_persists_run_identity_and_toolchain_snapshot(tmp_path, mo
 
     assert cli.main(["verify", str(source), "--out", str(output)]) == 0
     report = json.loads((output / "report.json").read_text())
+    provenance = json.loads((output / "provenance.json").read_text())
+    assert provenance["report"]["status"] == "PRESENT"
+    assert provenance["run_id"] == report["metadata"]["run_identity"]["run_id"]
     metadata = report["metadata"]
     assert metadata["toolchain_snapshot"]["tools"]["iverilog"]["version"] == "test-version"
     identity = metadata["run_identity"]
