@@ -345,6 +345,11 @@ def main(argv: list[str] | None = None) -> int:
                     requested_timeout_seconds=args.timeout_seconds, profile=args.profile)
             elif args.command == "cleanup-workspace":
                 result = cleanup_workspace(args.workspace, args.allowed_root, dry_run=not args.execute)
+            elif args.command == "mutation-score":
+                records = json.loads(args.results.read_text(encoding="utf-8"))
+                result = evaluate_mutation_results(records)
+            elif args.command == "golden-corpus":
+                result = validate_golden_corpus(args.root, args.manifest)
             else:
                 result = record_retention_action(args.path, action=args.action, reason=args.reason,
                     actor=args.actor, retention_until_utc=args.until)
@@ -362,6 +367,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if result["status"] == "APPROVED" else 2
         if args.command == "validate-waiver":
             return 0 if result["valid"] else 2
+        if args.command == "golden-corpus":
+            return 0 if result["status"] == "PASS" else 2
         return 0
     try:
         results = run_project(args.source, args.out, top=args.top, testbenches=args.testbench,
