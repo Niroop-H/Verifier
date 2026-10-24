@@ -98,3 +98,13 @@ def test_snapshot_digest_detects_tampering(tmp_path, monkeypatch):
     assert vendor_sources.verify(item) is True
     source.write_text("changed notice\n", encoding="utf-8")
     assert vendor_sources.verify(item) is False
+
+
+def test_manifest_groups_sources_into_known_packs():
+    data = vendor_sources.load_manifest()
+    expected = {"formal", "rtl-tooling", "physical-design"}
+    assert {item.get("pack") for item in data["sources"]} == expected
+    names = [item["name"] for item in data["sources"]]
+    assert len(names) == len(set(names))
+    assert all(item.get("pack") in expected for item in data["sources"])
+    assert all(item["destination"].startswith("vendor/src/") for item in data["sources"])
