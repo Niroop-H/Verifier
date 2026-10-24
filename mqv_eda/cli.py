@@ -17,6 +17,7 @@ from .regression_intelligence import cluster_failures, detect_flaky_runs, ingest
 from .operations import (build_provenance, cleanup_workspace, estimate_resources, evaluate_approval, evidence_scorecard, map_change_impact, record_retention_action, validate_waiver)
 from .quality_gates import evaluate_mutation_results, validate_golden_corpus
 from .contracts import cli_contract
+from .history import minimize_failure_cover, regression_history
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mqv-eda", description="MAH Quantum Verify local EDA verification runner")
@@ -208,6 +209,12 @@ def build_parser() -> argparse.ArgumentParser:
     golden.add_argument("root", type=Path)
     golden.add_argument("manifest", type=Path)
     golden.add_argument("--out", type=Path, default=Path("mqv-golden-corpus.json"))
+    history = sub.add_parser("history", help="Summarize ordered regression reports without hiding failures")
+    history.add_argument("reports", nargs="+", type=Path)
+    history.add_argument("--out", type=Path, default=Path("mqv-regression-history.json"))
+    minimize = sub.add_parser("minimize-failures", help="Suggest a smaller test subset from failure-ID mappings")
+    minimize.add_argument("cases", type=Path)
+    minimize.add_argument("--out", type=Path, default=Path("mqv-minimized-tests.json"))
     verify = sub.add_parser("verify", help="Run applicable EDA checks on a project folder or ZIP")
     verify.add_argument("source", type=Path)
     verify.add_argument("--top", help="Explicit RTL top-level module")
@@ -299,7 +306,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, indent=2))
         print(f"Triage evidence: {args.out}")
         return 0
-    if args.command in {"inventory", "run-identity", "policy", "sbom", "flaky", "cluster-failures", "coverage", "evidence-scorecard", "provenance", "approval-record", "validate-waiver", "change-impact", "estimate-resources", "cleanup-workspace", "retention-record", "mutation-score", "golden-corpus"}:
+    if args.command in {"inventory", "run-identity", "policy", "sbom", "flaky", "cluster-failures", "coverage", "evidence-scorecard", "provenance", "approval-record", "validate-waiver", "change-impact", "estimate-resources", "cleanup-workspace", "retention-record", "mutation-score", "golden-corpus", "history", "minimize-failures"}:
         try:
             if args.command == "inventory":
                 result = inventory_inputs(args.source)
@@ -350,6 +357,11 @@ def main(argv: list[str] | None = None) -> int:
                 result = evaluate_mutation_results(records)
             elif args.command == "golden-corpus":
                 result = validate_golden_corpus(args.root, args.manifest)
+            elif args.command == "history":
+                result = regression_history(args.reports)
+            elif args.command == "minimize-failures":
+                cases = json.loads(args.cases.read_text(encoding="utf-8"))
+                result = minimize_failure_cover(cases)
             else:
                 result = record_retention_action(args.path, action=args.action, reason=args.reason,
                     actor=args.actor, retention_until_utc=args.until)
