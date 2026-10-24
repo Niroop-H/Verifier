@@ -13,6 +13,7 @@ COMMANDS = {
     "compare": {"no_regression": 0, "regression": 1, "invalid_input": 2},
     "policy": {"eligible_for_human_review": 0, "blocked": 2},
     "baseline-freshness": {"fresh": 0, "stale_or_unverifiable": 2},
+    "license-inventory": {"inventory_written": 0, "invalid_or_error": 2},
     "jobs run-once": {"job_executed": 0, "idle_or_no_queued_job": 0, "execution_error": 2},
     "approval-record": {"approved": 0, "not_approved_or_blocked": 2},
     "bundle": {"verified_or_created": 0, "invalid_or_error": 2},
