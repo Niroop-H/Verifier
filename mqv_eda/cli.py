@@ -10,6 +10,7 @@ from .tools import discover_tools
 from .pdks import inspect_profile, list_profiles
 from .tool_catalog import list_tool_catalog
 from .report_analysis import compare_reports, triage_log, write_json
+from .evidence_bundle import create_bundle, verify_bundle
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mqv-eda", description="MAH Quantum Verify local EDA verification runner")
@@ -22,6 +23,14 @@ def build_parser() -> argparse.ArgumentParser:
     pdks.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
     catalog = sub.add_parser("tool-catalog", help="List tool integration and validation states")
     catalog.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    bundle = sub.add_parser("bundle", help="Create or verify an integrity-checked evidence ZIP")
+    bundle_sub = bundle.add_subparsers(dest="bundle_action", required=True)
+    bundle_create = bundle_sub.add_parser("create", help="Create a bundle from an evidence directory")
+    bundle_create.add_argument("source", type=Path)
+    bundle_create.add_argument("output", type=Path)
+    bundle_create.add_argument("--project", help="Optional non-sensitive project label")
+    bundle_verify = bundle_sub.add_parser("verify", help="Verify a bundle and its file hashes")
+    bundle_verify.add_argument("archive", type=Path)
     compare = sub.add_parser("compare", help="Compare two JSON evidence reports and identify regressions")
     compare.add_argument("baseline", type=Path)
     compare.add_argument("candidate", type=Path)
@@ -64,6 +73,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "tool-catalog":
         print(json.dumps(list_tool_catalog(), indent=2))
         return 0
+    if args.command == "bundle":
+        try:
+            if args.bundle_action == "create":
+                result = create_bundle(args.source, args.output, metadata={"project": args.project} if args.project else {})
+                print(json.dumps({k: v for k, v in result.items() if k != "manifest"}, indent=2))
+                return 0
+            result = verify_bundle(args.archive)
+        except (OSError, ValueError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2))
+        return 0 if result["status"] == "PASS" else 2
     if args.command == "compare":
         try:
             result = compare_reports(args.baseline, args.candidate)
