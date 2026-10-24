@@ -19,7 +19,8 @@ from .quality_gates import evaluate_mutation_results, validate_golden_corpus
 from .contracts import cli_contract
 from .history import minimize_failure_cover, regression_history
 from .config_validation import load_and_validate_config
-from .job_queue import enqueue as enqueue_job, get_job, list_jobs, claim_next, cancel_job, transition as transition_job, job_health\nfrom .waiver_register import create_waiver, get_waiver, list_waivers, revoke_waiver
+from .job_queue import enqueue as enqueue_job, get_job, list_jobs, claim_next, cancel_job, transition as transition_job, job_health
+from .waiver_register import create_waiver, get_waiver, list_waivers, revoke_waiver
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mqv-eda", description="MAH Quantum Verify local EDA verification runner")
