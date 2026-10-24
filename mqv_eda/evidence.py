@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import re
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +11,8 @@ from .models import CheckResult, aggregate_status, utc_now
 from .security import sha256_file
 
 MANIFEST_SCHEMA_VERSION = "1.0"
+DEFAULT_MAX_BUNDLE_BYTES = 100 * 1024 * 1024
+MAX_BUNDLE_FILES = 10_000
 
 
 def build_evidence_manifest(
@@ -16,41 +21,87 @@ def build_evidence_manifest(
     metadata: dict[str, Any] | None = None,
     *,
     generated_utc: str | None = None,
+    bundle_inputs: bool = False,
+    max_bundle_bytes: int = DEFAULT_MAX_BUNDLE_BYTES,
 ) -> dict[str, Any]:
-    """Build a manifest for a verification run.
+    """Build a manifest and optionally copy external inputs into the evidence bundle.
 
-    Both the check-time digest and the generation-time digest are retained when
-    an input remains available. This can expose input changes during a run.
-    Hashes identify bytes; they do not prove design correctness or tool trust.
+    Bundling is opt-in because RTL, netlists, libraries, PDK collateral and reports
+    may be confidential or licence-restricted. The byte limit is preflighted before
+    copying. Hashes identify observed bytes; they do not prove design correctness.
     """
     root = Path(output_dir).resolve()
-    checks: list[dict[str, Any]] = []
+    if max_bundle_bytes < 0:
+        raise ValueError("max_bundle_bytes must be zero or greater")
 
+    external_paths: dict[Path, int] = {}
+    for result in results:
+        for source_path in result.input_hashes:
+            source = Path(source_path).resolve()
+            if source.is_file() and not _within(source, root):
+                external_paths[source] = source.stat().st_size
+
+    if bundle_inputs:
+        if len(external_paths) > MAX_BUNDLE_FILES:
+            raise ValueError(
+                f"Cannot bundle {len(external_paths)} external input files; "
+                f"limit is {MAX_BUNDLE_FILES}."
+            )
+        total_bytes = sum(external_paths.values())
+        if total_bytes > max_bundle_bytes:
+            raise ValueError(
+                f"External inputs total {total_bytes} bytes, exceeding the "
+                f"bundle limit of {max_bundle_bytes} bytes. No inputs were copied."
+            )
+        root.mkdir(parents=True, exist_ok=True)
+        for source in sorted(external_paths):
+            actual_hash = sha256_file(source)
+            safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", source.name).strip("._") or "input"
+            destination = root / "evidence-inputs" / f"{actual_hash[:16]}-{safe_name}"
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            if destination.exists():
+                if not destination.is_file() or sha256_file(destination) != actual_hash:
+                    raise ValueError(f"Evidence bundle destination collision: {destination.name}")
+            else:
+                shutil.copyfile(source, destination)
+                if sha256_file(destination) != actual_hash:
+                    destination.unlink(missing_ok=True)
+                    raise OSError(f"Copied evidence input failed hash verification: {destination.name}")
+
+    checks: list[dict[str, Any]] = []
     for result in results:
         inputs: list[dict[str, Any]] = []
         for source_path, expected_hash in sorted(result.input_hashes.items()):
-            source = Path(source_path)
-            inside_bundle = _within(source, root)
+            source = Path(source_path).resolve()
+            exists = source.is_file()
+            observed_hash = sha256_file(source) if exists else None
+            changed = observed_hash is not None and observed_hash != expected_hash
+
+            if bundle_inputs and exists and not _within(source, root):
+                safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", source.name).strip("._") or "input"
+                destination = root / "evidence-inputs" / f"{observed_hash[:16]}-{safe_name}"
+                display_path = destination.relative_to(root).as_posix()
+                bundled = destination.is_file() and sha256_file(destination) == observed_hash
+                if not bundled:
+                    display_path = source.name
+            else:
+                display_path = _display_path(str(source), root)
+                bundled = _within(source, root)
+
             item: dict[str, Any] = {
-                "path": _display_path(source_path, root),
-                "bundled": inside_bundle,
+                "path": display_path,
+                "bundled": bundled,
                 "sha256_at_check_time": expected_hash,
+                "exists_at_manifest_time": exists,
             }
-            try:
-                if source.is_file():
-                    observed = sha256_file(source)
-                    item["observed_sha256"] = observed
-                    item["exists_at_manifest_time"] = True
-                    item["changed_since_check"] = observed != expected_hash
-                else:
-                    item["exists_at_manifest_time"] = False
-            except OSError:
-                item["exists_at_manifest_time"] = False
+            if observed_hash is not None:
+                item["observed_sha256"] = observed_hash
+                item["changed_since_check"] = changed
             inputs.append(item)
 
         log = None
         if result.log_path:
-            log_path = Path(result.log_path)
+            log_path = Path(result.log_path).resolve()
             if log_path.is_file():
                 try:
                     log = {
@@ -81,6 +132,12 @@ def build_evidence_manifest(
         "overall_status": aggregate_status(results).value,
         "run_metadata": metadata or {},
         "checks": checks,
+        "bundle": {
+            "inputs_bundled": bundle_inputs,
+            "max_bundle_bytes": max_bundle_bytes if bundle_inputs else None,
+            "external_input_count": len(external_paths),
+            "external_input_bytes": sum(external_paths.values()),
+        },
         "evidence_boundary": (
             "Hashes identify recorded bytes; they do not prove correctness, "
             "tool trustworthiness, completeness of verification, foundry sign-off, "
@@ -91,7 +148,7 @@ def build_evidence_manifest(
 
 def _within(path: Path, root: Path) -> bool:
     try:
-        Path(path).resolve().relative_to(root)
+        path.resolve().relative_to(root)
         return True
     except (OSError, ValueError):
         return False
@@ -116,10 +173,10 @@ def _safe_relative(root: Path, value: str) -> Path | None:
 
 
 def verify_evidence_manifest(path: Path) -> dict[str, Any]:
-    """Verify bundled inputs/logs; fail for missing bundled evidence.
+    """Verify bundled inputs/logs; fail for missing, changed or unsafe evidence.
 
     External source inputs are represented by basename only to avoid leaking
-    machine paths. They cannot be re-verified from this bundle, so this function
+    machine paths. They cannot be re-verified from this bundle, so verification
     reports them as EXTERNAL_UNVERIFIABLE rather than claiming integrity.
     """
     path = Path(path)
@@ -180,7 +237,7 @@ def verify_evidence_manifest(path: Path) -> dict[str, Any]:
         "problems": problems,
         "note": (
             "Integrity verification covers bundled referenced files only. External "
-            "inputs must be supplied in the evidence bundle to be independently re-hashed. "
+            "inputs must be included in the evidence bundle to be independently re-hashed. "
             "This does not validate design correctness or the original execution environment."
         ),
     }
