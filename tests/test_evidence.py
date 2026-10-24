@@ -19,6 +19,8 @@ def test_manifest_records_status_and_hashes(tmp_path):
         input_hashes={str(source): source_hash},
         log_path=str(log),
         tool_version="test-tool 1.0",
+        started_utc="2026-01-01T00:00:00+00:00",
+        command=["/usr/bin/iverilog", "-g2012", str(source)],
         exit_code=0,
         duration_seconds=0.25,
     )
@@ -30,6 +32,10 @@ def test_manifest_records_status_and_hashes(tmp_path):
     assert manifest["overall_status"] == "PASS"
     assert manifest["checks"][0]["inputs"][0]["observed_sha256"] == source_hash
     assert manifest["checks"][0]["log"]["sha256"] == hashlib.sha256(log.read_bytes()).hexdigest()
+    assert manifest["checks"][0]["started_utc"] == "2026-01-01T00:00:00+00:00"
+    assert manifest["checks"][0]["redacted_command"] == ["iverilog", "-g2012", "design.v"]
+    assert len(manifest["checks"][0]["command_sha256"]) == 64
+    assert str(tmp_path) not in json.dumps(manifest)
     assert manifest["run_metadata"]["source_revision"] == "abc123"
 
 
