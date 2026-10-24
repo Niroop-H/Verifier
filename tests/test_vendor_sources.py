@@ -85,6 +85,7 @@ def test_snapshot_digest_detects_tampering(tmp_path, monkeypatch):
         "revision": "a" * 40,
         "destination": "vendor/src/example",
     }
+    item["tree_sha256"] = vendor_sources.tree_digest(destination)
     marker = {
         "schema_version": 1,
         "name": item["name"],
