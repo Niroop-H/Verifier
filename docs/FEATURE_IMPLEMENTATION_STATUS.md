@@ -24,7 +24,7 @@ This tracker separates code that exists from complete acceptance of the original
 | 7 | Evidence retention policy | Partial | Guarded file-level archive/delete actions now support dry-run, archive digest verification, and explicit digest confirmation for deletion; scheduled retention, immutable audit storage, directory/archive policy, and legal controls remain |
 | 8 | Portable evidence export | Implemented baseline | Expand interoperable schemas as more reports are supported |
 | 9 | Evidence completeness scorecard | Implemented baseline | Integrate expected evidence profiles with actual run policies |
-| 10 | Run provenance chain | Partial | Persist links and optionally sign provenance statements |
+| 10 | Run provenance chain | Partial | Standard verify and local worker now emit a provenance JSON linking run identity to the report hash; detached signing, bundle linkage, durable provenance storage and trust verification remain |
 | 11 | Verification policy engine | Implemented baseline | Integrate policy evaluation into authenticated release workflows |
 | 12 | Fail-closed missing-evidence behavior | Implemented baseline | Add broader integration and adversarial regression coverage |
 | 13 | Policy versioning | Implemented baseline | Add managed immutable policy storage and migration lifecycle |
@@ -150,3 +150,8 @@ The gate evaluates freshness metadata; it does not prove semantic equivalence, e
 ## Latest incremental implementation — report-bound run identity
 
 The normal `verify` path and local queue worker now attach a run-identity envelope and toolchain discovery snapshot to the JSON report metadata. The identity binds the project input fingerprint, selected run configuration, source revision when available, and discovered toolchain snapshot. The toolchain record includes detected versions where the probe supports them and missing-tool state; it does not yet hash or cryptographically attest native executables.
+
+
+## Latest incremental implementation — automatic provenance output
+
+Every standard `verify` run and local queued worker now writes `provenance.json` beside the report. The record binds the run ID/fingerprint and source revision where available to the report's SHA-256, size and filename label. The provenance JSON itself is not signed, and the current report link does not include an evidence bundle; use detached evidence signing and independently pinned trust keys when authenticity is required.
