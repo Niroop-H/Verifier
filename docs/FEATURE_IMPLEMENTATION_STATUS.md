@@ -18,7 +18,7 @@ This tracker separates code that exists from complete acceptance of the original
 | 1 | Immutable run identity | Partial | Run identity is now attached to each standard verification report and local worker report, bound to input/config/toolchain fingerprints; immutable external storage and end-of-run lifecycle linkage remain |
 | 2 | Complete input inventory | Partial | Capture transitive includes, policy-approved environment and untracked inputs at job start |
 | 3 | Toolchain identity snapshot | Partial | Standard verification and worker reports now embed tool discovery/version output and missing-tool state; executable digests, signed tool identity, and pinned adapter provenance remain |
-| 4 | Reproducible-run comparison | Partial | Execute controlled reruns and classify expected nondeterminism |
+| 4 | Reproducible-run comparison | Partial | `repro-check` now executes 2–10 runs and compares ordered stage/status/required/exit-code signatures while recording input fingerprints and per-run provenance; bitwise artifact comparison and expected-nondeterminism policies remain |
 | 5 | Evidence bundle manifest verification | Implemented baseline | Continue adversarial archive testing and release hardening |
 | 6 | Detached evidence signatures | Implemented baseline | Production trust-root and key lifecycle integration remains deployment-specific |
 | 7 | Evidence retention policy | Partial | Guarded file-level archive/delete actions now support dry-run, archive digest verification, and explicit digest confirmation for deletion; scheduled retention, immutable audit storage, directory/archive policy, and legal controls remain |
@@ -165,3 +165,8 @@ Run `python -m mqv_eda license-inventory ./vendor --out license-inventory.json` 
 ## Latest incremental implementation — detached provenance signatures
 
 `sign-provenance provenance.json --private-key private.pem --signature provenance.sig` signs the exact provenance bytes using OpenSSL. `verify-provenance-signature provenance.json --public-key trusted-public.pem --signature provenance.sig` verifies them. The public key must be independently trusted; a valid signature alone does not establish signer identity. Protect private keys and do not commit them to the repository.
+
+
+## Latest incremental implementation — controlled reproducibility check
+
+Run `python -m mqv_eda repro-check ./rtl-project --runs 3 --out ./repro-evidence`. The command executes the project repeatedly, writes a report and provenance file for each run, records the input fingerprint, and emits `reproducibility-summary.json`. It distinguishes stable outcomes, changed inputs, and differing check outcomes. Stable outcomes do not mean bit-for-bit identical artifacts or correctness; full waveform/netlist/layout hashing and expected-nondeterminism policies remain outstanding.
