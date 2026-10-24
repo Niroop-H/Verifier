@@ -14,7 +14,7 @@ from .evidence_bundle import create_bundle, verify_bundle
 from .evidence_signing import sign_bundle, verify_bundle_signature
 from .governance import create_run_identity, evaluate_policy, generate_sbom, inventory_inputs
 from .regression_intelligence import cluster_failures, detect_flaky_runs, ingest_cobertura_coverage
-from .operations import (build_provenance, cleanup_workspace, estimate_resources, evaluate_approval, evidence_scorecard, map_change_impact, record_retention_action, validate_waiver)
+from .operations import (build_provenance, cleanup_workspace, estimate_resources, evaluate_approval, evidence_scorecard, map_change_impact, record_retention_action, apply_retention_action, validate_waiver)
 from .quality_gates import evaluate_mutation_results, validate_golden_corpus
 from .contracts import cli_contract
 from .history import minimize_failure_cover, regression_history
@@ -121,7 +121,7 @@ def build_parser() -> argparse.ArgumentParser:
     cleanup.add_argument("workspace", type=Path)
     cleanup.add_argument("--allowed-root", type=Path, required=True)
     cleanup.add_argument("--execute", action="store_true", help="Actually remove the workspace; default is dry-run")
-    retention = sub.add_parser("retention-record", help="Record retain/archive/delete intent without deleting data")
+    retention = sub.add_parser("retention-record", help="Record or execute guarded file retention actions (dry-run by default)")
     retention.add_argument("path", type=Path)
     retention.add_argument("--action", choices=["retain", "archive", "delete"], required=True)
     retention.add_argument("--reason", required=True)
@@ -375,8 +375,15 @@ def main(argv: list[str] | None = None) -> int:
             elif args.command == "validate-config":
                 result = load_and_validate_config(args.config, args.source)
             else:
-                result = record_retention_action(args.path, action=args.action, reason=args.reason,
-                    actor=args.actor, retention_until_utc=args.until)
+                if args.execute:
+                    result = apply_retention_action(args.path, action=args.action, reason=args.reason,
+                        actor=args.actor, archive_to=args.archive_to,
+                        expected_sha256=args.confirm_sha256, dry_run=False)
+                else:
+                    result = apply_retention_action(args.path, action=args.action, reason=args.reason,
+                        actor=args.actor, archive_to=args.archive_to,
+                        expected_sha256=args.confirm_sha256, dry_run=True)
+                    result["retention_until_utc"] = args.until
             out_path = getattr(args, "out", None) or Path("mqv-cleanup-result.json")
             out_path.parent.mkdir(parents=True, exist_ok=True)
             out_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
