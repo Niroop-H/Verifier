@@ -1,6 +1,8 @@
 name: Vendor pinned EDA source snapshots
 
 on:
+  push:
+    branches: ["feature/self-contained-toolchain"]
   workflow_dispatch:
     inputs:
       confirm:
@@ -17,7 +19,7 @@ concurrency:
 
 jobs:
   vendor:
-    if: ${{ inputs.confirm == 'VENDOR' }}
+    if: ${{ github.event_name == 'push' || inputs.confirm == 'VENDOR' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
@@ -43,6 +45,26 @@ jobs:
           while IFS= read -r name; do
             python scripts/vendor_sources.py verify --name "$name"
           done < <(python -c 'import json; print("\n".join(x["name"] for x in json.load(open("vendor/manifest.json", encoding="utf-8"))["sources"]))')
+
+      - name: Report source volume and reject files beyond GitHub's regular-file limit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          root = Path("vendor/src")
+          files = [p for p in root.rglob("*") if p.is_file() and not p.is_symlink()]
+          total = sum(p.stat().st_size for p in files)
+          oversized = [(p, p.stat().st_size) for p in files if p.stat().st_size >= 95 * 1024 * 1024]
+          print(f"Vendored files: {len(files):,}")
+          print(f"Working-tree size: {total / (1024 ** 3):.2f} GiB")
+          if oversized:
+              for path, size in oversized:
+                  print(f"REQUIRES REVIEW: {path} ({size / (1024 ** 2):.1f} MiB)")
+              raise SystemExit("Oversized source/artifact detected; split or explicitly review it before committing.")
+          if total > 3.5 * 1024 ** 3:
+              raise SystemExit("Vendor tree exceeds 3.5 GiB safety budget; split the toolchain into separately versioned source packs.")
+          PY
 
       - name: Commit vendored source files to the selected branch
         shell: bash
