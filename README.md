@@ -12,7 +12,7 @@ MAH Quantum Verify is an early-stage EDA verification orchestration platform. Th
 
 ## Product roadmap — 50 high-value engineering features
 
-The [50-feature engineering backlog](docs/FEATURE_CATALOG_50.md) prioritizes less-visible capabilities that matter in serious verification workflows: reproducibility, evidence integrity, fail-closed policy gates, customer-controlled execution, supply-chain inventory, regression quality, and auditability. It is a roadmap, not a claim that all listed features are implemented.
+The [50-feature engineering backlog](docs/FEATURE_CATALOG_50.md) prioritizes less-visible capabilities that matter in serious verification workflows. See the [live implementation status](docs/FEATURE_IMPLEMENTATION_STATUS.md) for a conservative item-by-item breakdown of implemented baselines, partial work, and remaining acceptance criteria. The roadmap is not a claim that all listed features are production-ready.
 
 ## Session 2 — Security assurance foundation
 
