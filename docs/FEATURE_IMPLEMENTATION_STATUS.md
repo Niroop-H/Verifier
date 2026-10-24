@@ -57,7 +57,7 @@ This tracker separates code that exists from complete acceptance of the original
 | 40 | Incident-ready execution record | Partial | Persist termination causes, resource-limit events and worker identity |
 | 41 | Stable CLI contract | Partial | Normalize legacy output envelopes and lock down every exit code in tests |
 | 42 | API schema and compatibility policy | Partial | Reference OpenAPI contract exists; an authenticated API server is not implemented |
-| 43 | Queue and cancellation semantics | Partial | SQLite-backed durable local lifecycle, atomic claim, event history and cooperative cancellation are implemented; still needs worker orchestration, lease recovery, multi-host queue and API integration |
+| 43 | Queue and cancellation semantics | Partial | SQLite-backed local lifecycle, atomic claim, event history, cooperative cancellation, worker ownership and a local run-once worker that executes queued EDA verification and persists evidence; lease recovery, multi-host queue, authenticated identity, API integration and mid-run cancellation remain |
 | 44 | Resource budget estimation | Partial | Calibrate estimates from measured history while retaining hard limits |
 | 45 | Artifact retention and cleanup | Partial | Integrate cleanup with worker lifecycle and retention enforcement |
 | 46 | Configuration validation | Partial | Integrate preflight validation into every run path and revalidate at execution time |
@@ -119,3 +119,22 @@ The SBOM output now includes a separate native EDA-tool inventory for configured
 ## Latest incremental implementation — job ownership check
 
 The local queue now rejects terminal job completion reports unless the supplied worker ID matches the worker recorded when the job was claimed. This prevents accidental or naive cross-worker completion in the local queue API and is covered by a regression test. Worker IDs remain caller-supplied labels, not cryptographically authenticated identities; a trusted worker service and lease/recovery protocol are still required for hostile or multi-tenant environments.
+
+
+## Latest incremental implementation — local EDA job worker
+
+The `jobs run-once --worker-id ID` command now atomically claims one queued job, executes the verification engine against the job payload's `source`, writes JSON/HTML evidence with job ID, worker label, input/run identity and toolchain snapshot, and records SUCCEEDED only when the aggregate result is PASS. Non-PASS verification results are recorded as FAILED; unexpected execution errors are recorded as worker failures. An empty queue returns IDLE.
+
+Example payload:
+
+```json
+{
+  "source": "./rtl-project",
+  "output_dir": "./artifacts/job-001",
+  "top": "top_module",
+  "testbenches": ["tb/top_tb.sv"],
+  "timeout": 120
+}
+```
+
+This is a single-host worker prototype, not a continuously supervised worker pool. Cancellation is not yet polled during an active EDA process, worker leases/recovery are absent, and worker IDs are labels rather than authenticated identities. Run only with trusted local job payloads.
