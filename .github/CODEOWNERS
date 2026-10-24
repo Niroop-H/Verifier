@@ -1,0 +1,4 @@
+# Review required for toolchain source pins, source snapshots, and import logic.
+/vendor/ @Niroop-H
+/scripts/vendor_sources.py @Niroop-H
+/.github/workflows/vendor-sources.yml @Niroop-H
