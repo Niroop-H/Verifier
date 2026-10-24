@@ -126,6 +126,8 @@ def sync(item: dict[str, Any]) -> None:
         actual = run(["git", "rev-parse", "HEAD"], cwd=checkout)
         if actual != item["revision"]:
             raise RuntimeError(f"{item['name']}: requested {item['revision']}, got {actual}")
+        # Populate submodules at the exact gitlink commits recorded by the pinned source.
+        run(["git", "submodule", "update", "--init", "--recursive"], cwd=checkout)
         shutil.copytree(checkout, staged, symlinks=True,
                         ignore=shutil.ignore_patterns(".git"))
         digest = tree_digest(staged)
