@@ -17,6 +17,8 @@ python scripts/vendor_sources.py verify
 python scripts/vendor_sources.py verify --name symbiyosys
 ```
 
+A repository maintainer can also open **Actions → Vendor pinned EDA source snapshots → Run workflow**, select this branch, and type `VENDOR`. The workflow materializes and verifies every declared source snapshot, then commits the source files to the selected branch. Review the resulting source volume and license inventory before merging.
+
 - `status` prints the pinned inputs.
 - `sync` clones the source at its exact full commit SHA and copies its tracked working tree into `vendor/src/`, excluding nested Git metadata. It preserves symlinks and original license/copyright files.
 - `sync` refuses to overwrite a directory unless its provenance marker matches the expected source and revision and its current content digest is unchanged.
