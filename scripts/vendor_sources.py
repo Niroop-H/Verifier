@@ -128,7 +128,7 @@ def sync(item: dict[str, Any]) -> str:
             raise RuntimeError(f"{item['name']}: requested {item['revision']}, got {actual}")
         # Populate submodules at the exact gitlink commits recorded by the pinned source.
         run(["git", "submodule", "update", "--init", "--recursive"], cwd=checkout)
-        excluded = {str(p).replace("\\\\", "/").strip("/") for p in item.get("exclude_paths", [])}
+        excluded = {str(p).replace("\\", "/").strip("/") for p in item.get("exclude_paths", [])}
         def ignore(relative_root: str, names: list[str]) -> set[str]:
             current = Path(relative_root)
             ignored: set[str] = set()
