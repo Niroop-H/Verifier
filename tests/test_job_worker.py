@@ -24,6 +24,7 @@ def test_run_once_executes_queued_verification_and_persists_evidence(tmp_path, m
     assert result["state"] == "SUCCEEDED"
     assert result["worker_id"] == "worker-1"
     assert (output / "report.json").exists()
+    assert json.loads((output / "provenance.json").read_text())["report"]["status"] == "PRESENT"
     report = json.loads((output / "report.json").read_text())
     assert report["metadata"]["job_id"] == job["id"]
     assert report["metadata"]["run_identity"]["input_file_count"] == 1
