@@ -170,6 +170,8 @@ def build_parser() -> argparse.ArgumentParser:
     job_finish.add_argument("--state", choices=["SUCCEEDED", "FAILED", "CANCELLED"], required=True)
     job_finish.add_argument("--detail", default="")
     job_finish.add_argument("--error")
+    job_worker = jobs_sub.add_parser("run-once", help="Claim and execute one queued EDA verification job locally")
+    job_worker.add_argument("--worker-id", required=True)
     waivers = sub.add_parser("waivers", help="Manage durable local policy-waiver records")
     waivers.add_argument("--db", type=Path, default=Path(".mqv/governance.sqlite3"))
     waivers_sub = waivers.add_subparsers(dest="waivers_action", required=True)
@@ -238,6 +240,50 @@ def main(argv: list[str] | None = None) -> int:
                 result = {"job": claim_next(args.db, worker_id=args.worker_id)}
             elif args.jobs_action == "cancel":
                 result = cancel_job(args.db, args.job_id, actor=args.actor)
+            elif args.jobs_action == "run-once":
+                job = claim_next(args.db, worker_id=args.worker_id)
+                if job is None:
+                    result = {"worker_id": args.worker_id, "state": "IDLE", "detail": "No queued jobs"}
+                else:
+                    payload = job["payload"]
+                    if not isinstance(payload, dict) or not isinstance(payload.get("source"), str):
+                        finish_job(args.db, job["id"], worker_id=args.worker_id, state="FAILED",
+                                   detail="Invalid payload: source must be a path string",
+                                   error="payload validation failed")
+                        raise ValueError("job payload must contain a string 'source' path")
+                    try:
+                        source = Path(payload["source"])
+                        output_dir = Path(payload.get("output_dir", ".mqv/job-runs/" + job["id"]))
+                        results = run_project(
+                            source, output_dir, top=payload.get("top"),
+                            testbenches=[Path(p) for p in payload.get("testbenches", [])],
+                            sim_top=payload.get("sim_top"), timeout=float(payload.get("timeout", 120)),
+                        )
+                        toolchain_snapshot = discover_tools()
+                        project_root = (source.resolve() if source.is_dir()
+                                        else (output_dir / "workspace" / "source").resolve())
+                        identity = create_run_identity(
+                            project_root,
+                            configuration={"top": payload.get("top"), "sim_top": payload.get("sim_top"),
+                                           "testbenches": payload.get("testbenches", []),
+                                           "timeout_seconds": float(payload.get("timeout", 120))},
+                            toolchain=toolchain_snapshot,
+                        )
+                        paths = write_reports(output_dir, results, {
+                            "job_id": job["id"], "worker_id": args.worker_id,
+                            "toolchain_snapshot": toolchain_snapshot, "run_identity": identity,
+                        })
+                        overall = aggregate_status(results)
+                        terminal = "SUCCEEDED" if overall == Status.PASS else "FAILED"
+                        result = finish_job(args.db, job["id"], worker_id=args.worker_id, state=terminal,
+                                            detail=f"Verification overall status: {overall.value}; report: {paths['json']}",
+                                            error=None if terminal == "SUCCEEDED" else overall.value)
+                        result["report_json"] = str(paths["json"])
+                        result["report_html"] = str(paths["html"])
+                    except Exception as exc:
+                        finish_job(args.db, job["id"], worker_id=args.worker_id, state="FAILED",
+                                   detail="Worker execution raised an exception", error=str(exc))
+                        raise
             else:
                 result = finish_job(args.db, args.job_id, worker_id=args.worker_id, state=args.state,
                                     detail=args.detail, error=args.error)
