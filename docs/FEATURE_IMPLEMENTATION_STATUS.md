@@ -28,8 +28,8 @@ This tracker separates code that exists from complete acceptance of the original
 | 11 | Verification policy engine | Implemented baseline | Integrate policy evaluation into authenticated release workflows |
 | 12 | Fail-closed missing-evidence behavior | Implemented baseline | Add broader integration and adversarial regression coverage |
 | 13 | Policy versioning | Implemented baseline | Add managed immutable policy storage and migration lifecycle |
-| 14 | Human approval gate | Partial | Authenticated identities, durable approvals and protected storage |
-| 15 | Separation of duties | Partial | Enforce in a trusted service; current local helper is not an identity system |
+| 14 | Human approval gate | Partial | SQLite-backed approval records now persist run ID, report hash, decision, rationale and event history; authenticated identities, protected storage and trusted release service remain |
+| 15 | Separation of duties | Partial | Durable approval CLI blocks self-approval against the recorded run operator/policy author; actor labels are not authenticated and trusted service-side enforcement remains |
 | 16 | Waiver and exception register | Partial | SQLite-backed scoped records, expiry, revocation and event history now exist; authenticated authorization, review workflow, protected storage and multi-user service integration remain |
 | 17 | Policy dry-run mode | Implemented baseline | Expand policy-specific preview coverage |
 | 18 | Baseline freshness rules | Partial | Fail-closed CLI gate now checks baseline run timestamp, max age, and source revision equality; policy-driven rerun execution and baseline approval workflow remain |
@@ -170,3 +170,8 @@ Run `python -m mqv_eda license-inventory ./vendor --out license-inventory.json` 
 ## Latest incremental implementation — controlled reproducibility check
 
 Run `python -m mqv_eda repro-check ./rtl-project --runs 3 --out ./repro-evidence`. The command executes the project repeatedly, writes a report and provenance file for each run, records the input fingerprint, and emits `reproducibility-summary.json`. It distinguishes stable outcomes, changed inputs, and differing check outcomes. Stable outcomes do not mean bit-for-bit identical artifacts or correctness; full waveform/netlist/layout hashing and expected-nondeterminism policies remain outstanding.
+
+
+## Latest incremental implementation — durable approval register
+
+Use `python -m mqv_eda approvals --db .mqv/approvals.sqlite3 create --run-id RUN_ID --report-sha256 SHA256 --actor REVIEWER --role release-reviewer --decision APPROVE --rationale "Evidence reviewed" --run-operator OPERATOR --policy-author POLICY_AUTHOR`. Approval decisions and event history are stored in SQLite. The command blocks an approval when the actor matches the supplied run operator or policy author. This is a local governance record, not cryptographic proof of identity or a fabrication authorization system.
