@@ -93,6 +93,66 @@ def test_verify_manifest_fails_when_input_changed_after_check(tmp_path):
     assert any(problem["status"] == "INPUT_CHANGED_DURING_RUN" for problem in report["problems"])
 
 
+
+def test_opt_in_bundling_makes_external_input_verifiable(tmp_path):
+    import hashlib
+    source_dir = tmp_path / "customer-source"
+    bundle_dir = tmp_path / "evidence"
+    source_dir.mkdir()
+    bundle_dir.mkdir()
+    source = source_dir / "design.v"
+    source.write_text("module top; endmodule\\n", encoding="utf-8")
+    digest = hashlib.sha256(source.read_bytes()).hexdigest()
+    result = CheckResult("RTL_LINT", Status.PASS, "done", input_hashes={str(source): digest})
+
+    manifest = build_evidence_manifest(bundle_dir, [result], bundle_inputs=True)
+    item = manifest["checks"][0]["inputs"][0]
+    assert item["bundled"] is True
+    assert item["path"].startswith("evidence-inputs/")
+    manifest_path = bundle_dir / "evidence-manifest.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    report = verify_evidence_manifest(manifest_path)
+    assert report["integrity_status"] == "PASS"
+    assert report["items_checked"] == 1
+
+
+def test_external_input_without_bundling_is_not_claimed_verified(tmp_path):
+    import hashlib
+    source_dir = tmp_path / "customer-source"
+    bundle_dir = tmp_path / "evidence"
+    source_dir.mkdir()
+    bundle_dir.mkdir()
+    source = source_dir / "design.v"
+    source.write_text("module top; endmodule\\n", encoding="utf-8")
+    digest = hashlib.sha256(source.read_bytes()).hexdigest()
+    result = CheckResult("RTL_LINT", Status.PASS, "done", input_hashes={str(source): digest})
+
+    manifest = build_evidence_manifest(bundle_dir, [result])
+    item = manifest["checks"][0]["inputs"][0]
+    assert item["bundled"] is False
+    manifest_path = bundle_dir / "evidence-manifest.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    report = verify_evidence_manifest(manifest_path)
+    assert report["integrity_status"] == "FAIL"
+    assert report["problems"][0]["status"] == "EXTERNAL_UNVERIFIABLE"
+
+
+def test_bundle_size_limit_rejects_before_copy(tmp_path):
+    source_dir = tmp_path / "customer-source"
+    bundle_dir = tmp_path / "evidence"
+    source_dir.mkdir()
+    bundle_dir.mkdir()
+    source = source_dir / "design.v"
+    source.write_text("module top; endmodule\\n", encoding="utf-8")
+    result = CheckResult("RTL_LINT", Status.PASS, "done", input_hashes={str(source): "not-used-here"})
+
+    import pytest
+    with pytest.raises(ValueError, match="exceeding the bundle limit"):
+        build_evidence_manifest(bundle_dir, [result], bundle_inputs=True, max_bundle_bytes=1)
+    assert not (bundle_dir / "evidence-inputs").exists()
+
+
 def test_verify_manifest_rejects_path_escape(tmp_path):
     import json
     manifest_path = tmp_path / "evidence-manifest.json"
