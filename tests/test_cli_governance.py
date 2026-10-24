@@ -1,3 +1,4 @@
+import hashlib
 import json
 import time
 
@@ -29,10 +30,11 @@ def test_retention_cli_defaults_to_dry_run(tmp_path, capsys):
     target = tmp_path / "evidence.txt"
     target.write_text("preserve me")
     output = tmp_path / "retention.json"
+    digest = hashlib.sha256(target.read_bytes()).hexdigest()
     assert main([
         "retention-record", str(target), "--action", "delete",
         "--reason", "Retention review", "--actor", "operator",
-        "--out", str(output),
+        "--confirm-sha256", digest, "--out", str(output),
     ]) == 0
     result = json.loads(output.read_text())
     capsys.readouterr()
