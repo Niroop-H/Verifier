@@ -236,3 +236,68 @@ def record_retention_action(path: Path, *, action: str, reason: str, actor: str,
             "actor": actor, "reason": reason, "retention_until_utc": retention_until_utc,
             "limitations": ["This records intent only; it does not archive or delete the target.",
                             "Production retention needs authenticated identity, access control, and audit persistence."]}
+
+
+def apply_retention_action(path: Path, *, action: str, reason: str, actor: str,
+                           archive_to: Path | None = None,
+                           expected_sha256: str | None = None,
+                           dry_run: bool = True) -> dict[str, Any]:
+    """Apply a guarded file-level retention action; dry-run is the default.
+
+    Archive copies one regular file to a new, non-existing destination and verifies
+    the copied digest before reporting success. Delete requires the caller to supply
+    the current SHA-256 as an explicit confirmation token. Directories, symlinks,
+    and destination overwrites are rejected.
+    """
+    if action not in {"retain", "archive", "delete"}:
+        raise ValueError("action must be retain, archive, or delete")
+    if not isinstance(reason, str) or not reason.strip() or not isinstance(actor, str) or not actor.strip():
+        raise ValueError("actor and reason are required")
+    source_input = Path(path)
+    if source_input.is_symlink():
+        raise ValueError("retention target cannot be a symlink")
+    source = source_input.resolve(strict=False)
+    if not source.exists():
+        raise ValueError("retention target does not exist")
+    if not source.is_file():
+        raise ValueError("retention action supports regular files only")
+    before = _hash(source)
+    result: dict[str, Any] = {
+        "schema": SCHEMA, "action": action, "status": "WOULD_APPLY" if dry_run else "PENDING",
+        "source_label": source.name, "sha256_before_action": before,
+        "actor": actor.strip(), "reason": reason.strip(), "dry_run": dry_run,
+    }
+    if action == "retain":
+        result["status"] = "RETAINED" if not dry_run else "WOULD_RETAIN"
+        return result
+    if action == "archive":
+        if archive_to is None:
+            raise ValueError("archive_to is required for archive action")
+        dest_input = Path(archive_to)
+        if dest_input.exists() or dest_input.is_symlink():
+            raise ValueError("archive destination must not already exist")
+        dest_parent = dest_input.parent.resolve(strict=False)
+        if not dest_parent.exists() or not dest_parent.is_dir():
+            raise ValueError("archive destination parent must already exist")
+        dest = dest_parent / dest_input.name
+        result["destination_label"] = dest.name
+        if dry_run:
+            result["status"] = "WOULD_ARCHIVE"
+            return result
+        shutil.copy2(source, dest)
+        copied = _hash(dest)
+        if copied != before:
+            try:
+                dest.unlink()
+            finally:
+                raise ValueError("archive digest verification failed; copied file removed where possible")
+        result.update({"status": "ARCHIVED", "sha256_after_action": copied})
+        return result
+    if expected_sha256 != before:
+        raise ValueError("delete requires --confirm-sha256 matching the current file digest")
+    if dry_run:
+        result["status"] = "WOULD_DELETE"
+        return result
+    source.unlink()
+    result["status"] = "DELETED"
+    return result
