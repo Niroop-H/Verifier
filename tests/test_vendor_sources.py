@@ -72,3 +72,28 @@ def test_manifest_rejects_non_https_repository(tmp_path, monkeypatch):
     monkeypatch.setattr(vendor_sources, "ROOT", tmp_path)
     with pytest.raises(ValueError, match="must use HTTPS"):
         vendor_sources.load_manifest()
+
+
+def test_snapshot_digest_detects_tampering(tmp_path, monkeypatch):
+    destination = tmp_path / "vendor" / "src" / "example"
+    destination.mkdir(parents=True)
+    source = destination / "LICENSE"
+    source.write_text("upstream license notice\n", encoding="utf-8")
+    item = {
+        "name": "example",
+        "repository": "https://example.com/example.git",
+        "revision": "a" * 40,
+        "destination": "vendor/src/example",
+    }
+    marker = {
+        "schema_version": 1,
+        "name": item["name"],
+        "repository": item["repository"],
+        "revision": item["revision"],
+        "tree_sha256": vendor_sources.tree_digest(destination),
+    }
+    (destination / vendor_sources.MARKER).write_text(json.dumps(marker), encoding="utf-8")
+    monkeypatch.setattr(vendor_sources, "ROOT", tmp_path)
+    assert vendor_sources.verify(item) is True
+    source.write_text("changed notice\n", encoding="utf-8")
+    assert vendor_sources.verify(item) is False
