@@ -191,6 +191,8 @@ def verify_evidence_manifest(path: Path) -> dict[str, Any]:
     checks_value = document.get("checks")
     if not isinstance(checks_value, list):
         raise ValueError("Evidence manifest 'checks' must be a JSON array.")
+    if not checks_value:
+        raise ValueError("Evidence manifest must contain at least one check.")
 
     root = path.parent.resolve()
     problems: list[dict[str, str]] = []
@@ -256,6 +258,9 @@ def verify_evidence_manifest(path: Path) -> dict[str, Any]:
                     problems.append({"path": str(log["path"]), "status": "EXTERNAL_UNVERIFIABLE"})
                 else:
                     verify_one(str(log["path"]), str(log["sha256"]))
+
+    if checked == 0 and not problems:
+        problems.append({"path": path.name, "status": "NO_EVIDENCE_REFERENCES"})
 
     return {
         "schema_version": MANIFEST_SCHEMA_VERSION,
