@@ -10,6 +10,7 @@ import json
 import os
 import platform
 import subprocess
+import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -195,17 +196,42 @@ def generate_sbom(*, include_environment: bool = True) -> dict[str, Any]:
                 "license_status": "DECLARED" if license_value != "UNKNOWN" else "UNKNOWN_REQUIRES_REVIEW",
                 "source_urls": urls,
             })
+    # Report native EDA tool presence separately from CycloneDX components: PATH
+    # presence is not proof of a trusted binary, version, license, or usable adapter.
+    from .tools import TOOL_SPECS
+    native_tools = []
+    for spec in TOOL_SPECS:
+        resolved = shutil.which(spec.executable)
+        native_tools.append({
+            "key": spec.key,
+            "executable": spec.executable,
+            "resolved_path": resolved,
+            "state": "PATH_PRESENT" if resolved else "NOT_FOUND",
+            "purpose": spec.purpose,
+            "tier": spec.tier,
+            "integration_level": spec.integration_level,
+            "version": None,
+            "limitations": ["Presence only; version, binary digest, license, and runtime health are not verified."],
+        })
     return {
         "bomFormat": "CycloneDX",
         "specVersion": "1.5",
         "version": 1,
-        "metadata": {"timestamp": _utc_now(), "tools": [{"name": "MAH Quantum Verify", "version": "development"}]},
+        "metadata": {
+            "timestamp": _utc_now(),
+            "tools": [{"name": "MAH Quantum Verify", "version": "development"}],
+            "component": {"name": "Execution environment", "version": platform.platform()},
+        },
         "components": components,
         "component_count": len(components),
+        "native_tool_inventory": native_tools,
+        "native_tool_count": len(native_tools),
+        "native_tools_found_on_path": sum(item["state"] == "PATH_PRESENT" for item in native_tools),
         "limitations": [
-            "Inventory covers installed Python distributions visible to this interpreter only.",
-            "Native executables, OS packages, EDA tools, FPGA vendor tools, and PDKs require separate inventory.",
+            "Python components cover distributions visible to this interpreter only.",
+            "Native tool inventory records PATH presence only; it is not a trusted binary or version attestation.",
+            "OS packages, FPGA vendor tools, proprietary EDA installations, and PDK contents may be incomplete.",
             "Missing license metadata is unknown, not permission to redistribute.",
-            "Validate against the official CycloneDX schema before claiming schema conformance.",
+            "Validate the component section against the official CycloneDX schema before claiming schema conformance.",
         ],
     }
