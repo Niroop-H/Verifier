@@ -138,7 +138,7 @@ def sync(item: dict[str, Any]) -> None:
             "license_review": item.get("license_review", "required"),
             "notice": "Upstream source. Preserve original license and copyright terms."
         }
-        (staged / MARKER).write_text(json.dumps(marker, indent=2) + "\\n", encoding="utf-8")
+        (staged / MARKER).write_text(json.dumps(marker, indent=2) + chr(10), encoding="utf-8")
         if destination.exists():
             shutil.rmtree(destination)
         shutil.move(str(staged), str(destination))
