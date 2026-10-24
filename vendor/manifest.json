@@ -15,7 +15,8 @@
       "destination": "vendor/src/symbiyosys",
       "license_review": "required",
       "purpose": "Formal verification task orchestration",
-      "notes": "Existing repository provenance records this exact commit. Re-check its license and transitive dependency obligations before redistribution."
+      "notes": "Existing repository provenance records this exact commit. Re-check its license and transitive dependency obligations before redistribution.",
+      "pack": "formal"
     },
     {
       "name": "opensta",
@@ -24,7 +25,8 @@
       "destination": "vendor/src/opensta",
       "license_review": "required",
       "purpose": "Static timing analysis",
-      "notes": "Existing CI checks out this exact commit. Build dependencies such as CUDD must be separately pinned and reviewed."
+      "notes": "Existing CI checks out this exact commit. Build dependencies such as CUDD must be separately pinned and reviewed.",
+      "pack": "physical-design"
     },
     {
       "name": "openroad-flow-scripts",
@@ -36,7 +38,8 @@
       "notes": "Curated source snapshot excludes flow/platforms PDK and library collateral to keep the core repository maintainable. Platform collateral must be separately pinned, license-reviewed, and packaged as optional platform packs before physical-design flows are claimed operational.",
       "exclude_paths": [
         "flow/platforms"
-      ]
+      ],
+      "pack": "physical-design"
     },
     {
       "name": "yosys",
@@ -45,7 +48,8 @@
       "destination": "vendor/src/yosys",
       "license_review": "required",
       "purpose": "RTL synthesis and structural checks",
-      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution."
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "rtl-tooling"
     },
     {
       "name": "iverilog",
@@ -54,7 +58,8 @@
       "destination": "vendor/src/iverilog",
       "license_review": "required",
       "purpose": "Verilog compiler and simulation runtime",
-      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution."
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "rtl-tooling"
     },
     {
       "name": "verilator",
@@ -63,7 +68,8 @@
       "destination": "vendor/src/verilator",
       "license_review": "required",
       "purpose": "SystemVerilog lint and compiled simulation",
-      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution."
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "rtl-tooling"
     },
     {
       "name": "ghdl",
@@ -72,7 +78,8 @@
       "destination": "vendor/src/ghdl",
       "license_review": "required",
       "purpose": "VHDL analysis and simulation",
-      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution."
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "rtl-tooling"
     },
     {
       "name": "openroad",
@@ -81,7 +88,8 @@
       "destination": "vendor/src/openroad",
       "license_review": "required",
       "purpose": "Physical design and implementation engine",
-      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution."
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "physical-design"
     },
     {
       "name": "eqy",
@@ -90,7 +98,8 @@
       "destination": "vendor/src/eqy",
       "license_review": "required",
       "purpose": "Hardware equivalence checking",
-      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution."
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "formal"
     },
     {
       "name": "verible",
@@ -99,7 +108,8 @@
       "destination": "vendor/src/verible",
       "license_review": "required",
       "purpose": "SystemVerilog parser and lint tools",
-      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution."
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "rtl-tooling"
     },
     {
       "name": "surelog",
@@ -108,7 +118,8 @@
       "destination": "vendor/src/surelog",
       "license_review": "required",
       "purpose": "SystemVerilog parser and elaboration",
-      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution."
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "rtl-tooling"
     },
     {
       "name": "z3",
@@ -117,7 +128,8 @@
       "destination": "vendor/src/z3",
       "license_review": "required",
       "purpose": "SMT solver",
-      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution."
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "formal"
     },
     {
       "name": "boolector",
@@ -126,7 +138,8 @@
       "destination": "vendor/src/boolector",
       "license_review": "required",
       "purpose": "SMT solver",
-      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution."
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "formal"
     },
     {
       "name": "sv2v",
@@ -135,7 +148,8 @@
       "destination": "vendor/src/sv2v",
       "license_review": "required",
       "purpose": "SystemVerilog-to-Verilog conversion",
-      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution."
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "rtl-tooling"
     },
     {
       "name": "cocotb",
@@ -144,7 +158,8 @@
       "destination": "vendor/src/cocotb",
       "license_review": "required",
       "purpose": "Python HDL testbench framework",
-      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution."
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "rtl-tooling"
     },
     {
       "name": "openlane",
@@ -153,7 +168,8 @@
       "destination": "vendor/src/openlane",
       "license_review": "required",
       "purpose": "RTL-to-GDS flow orchestration",
-      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution."
+      "notes": "Commit SHA pinned from the upstream repository at manifest creation. Verify upstream source identity, license, build dependencies, and redistribution obligations before customer distribution.",
+      "pack": "physical-design"
     }
   ],
   "binary_artifacts": [
@@ -167,5 +183,12 @@
       "purpose": "Pinned evaluation toolchain distribution",
       "notes": "Checksum is from the repository's existing CI configuration. Verify the upstream release and redistribution terms before bundling it into a customer installer."
     }
-  ]
+  ],
+  "pack_policy": {
+    "formal": "Formal engines and orchestration; validate individual solver/build dependencies before use.",
+    "rtl-tooling": "RTL simulation, parsing, linting, conversion, and testbench tooling.",
+    "physical-design": "Physical implementation and flow collateral; platform/PDK data remains separate.",
+    "max_snapshot_bytes": 1610612736,
+    "note": "Packs are acquisition/CI groupings, not a claim that all dependencies are complete, licensed for redistribution, or validated for production."
+  }
 }
