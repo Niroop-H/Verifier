@@ -49,7 +49,7 @@ This tracker separates code that exists from complete acceptance of the original
 | 32 | No-network execution mode | Partial | Docker runner requests --network=none; validate all supported deployment paths |
 | 33 | Workspace path containment | Implemented baseline | Continue TOCTOU and platform-specific path testing |
 | 34 | Secret-safe logging | Implemented baseline | Add more secret formats and test all report/log sinks |
-| 35 | Dependency inventory / SBOM | Partial | Inventory native tools, OS packages, EDA binaries and PDK metadata; validate official schema |
+| 35 | Dependency inventory / SBOM | Partial | SBOM now includes installed Python distributions plus native EDA tool PATH presence and declared integration tiers; binary digests/versions, OS packages, PDK metadata, licensing validation, and official schema validation remain |
 | 36 | License and notice inventory | Partial | Enforce notices at release packaging and complete legal redistribution review |
 | 37 | Signed build provenance | Partial | Bind build artifacts to builder identity and signed provenance/trust roots |
 | 38 | Customer-managed worker mode | Partial | Complete control-plane/worker separation and prove RTL never leaves the customer host |
@@ -109,3 +109,8 @@ This is not yet a complete retention service: there is no scheduler, immutable e
 ## Latest incremental implementation — accessible evidence report
 
 The generated HTML report now provides a semantic run-summary section, check counts, table caption and scoped headers, responsive layout, visible keyboard focus, print styling, and escaped user/tool text. A regression test checks those properties. This improves the accessible report artifact; it does not constitute a full interactive dashboard or a formal WCAG conformance audit.
+
+
+## Latest incremental implementation — broader SBOM inventory
+
+The SBOM output now includes a separate native EDA-tool inventory for configured tool adapters, reporting executable lookup state, resolved path, declared purpose, tier, and integration level. It explicitly leaves version and trust status unverified instead of implying that a PATH hit is a trusted toolchain attestation. Python package inventory remains available. Full native binary hashes, OS package inventory, proprietary tool metadata, PDK inventory, and official CycloneDX schema validation are still outstanding.
