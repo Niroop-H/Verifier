@@ -47,4 +47,4 @@ MAH Quantum can retain proprietary rights in independently authored code, produc
 
 ## Scope limitation
 
-This is an engineering foundation, not a completed million-line integration. The manifest currently declares three source repositories and one binary toolchain artifact. The utility does not yet recursively resolve every dependency, authenticate Git commit signatures, audit license compatibility, or prove reproducible builds. Those remain acceptance criteria.
+This is an engineering foundation, not a completed million-line integration. The manifest currently declares 16 source repositories and one binary toolchain artifact. The utility does not yet recursively resolve every dependency, authenticate Git commit signatures, audit license compatibility, or prove reproducible builds. Those remain acceptance criteria.
