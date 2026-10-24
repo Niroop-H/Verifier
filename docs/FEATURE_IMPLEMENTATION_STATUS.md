@@ -21,7 +21,7 @@ This tracker separates code that exists from complete acceptance of the original
 | 4 | Reproducible-run comparison | Partial | Execute controlled reruns and classify expected nondeterminism |
 | 5 | Evidence bundle manifest verification | Implemented baseline | Continue adversarial archive testing and release hardening |
 | 6 | Detached evidence signatures | Implemented baseline | Production trust-root and key lifecycle integration remains deployment-specific |
-| 7 | Evidence retention policy | Partial | Enforce retention/archival/deletion schedules, not just record intent |
+| 7 | Evidence retention policy | Partial | Guarded file-level archive/delete actions now support dry-run, archive digest verification, and explicit digest confirmation for deletion; scheduled retention, immutable audit storage, directory/archive policy, and legal controls remain |
 | 8 | Portable evidence export | Implemented baseline | Expand interoperable schemas as more reports are supported |
 | 9 | Evidence completeness scorecard | Implemented baseline | Integrate expected evidence profiles with actual run policies |
 | 10 | Run provenance chain | Partial | Persist links and optionally sign provenance statements |
@@ -97,3 +97,10 @@ This is **not yet a distributed queue or a complete background execution service
 The `mqv_eda.waiver_register` module now persists scoped policy exceptions in SQLite, requires a non-empty rationale and future expiry, records creation/revocation events, supports revocation, and evaluates scope using exact-match context keys. The `mqv-eda waivers` CLI exposes create/list/show/revoke operations.
 
 This is a local governance primitive, not a trusted authorization service: actor names are caller-supplied, wildcard matching is intentionally not implemented, and the register is not yet wired as an automatic policy bypass or release approval. Treat waivers as records for review; do not assume a record alone authorizes a release.
+
+
+## Latest incremental implementation — guarded retention actions
+
+The retention CLI now supports a dry-run by default and an explicit `--execute` switch. File archive operations require a new destination and verify the copied SHA-256 digest. File deletion requires `--confirm-sha256` matching the current source digest. Symlinks and directories are rejected. Automated tests cover dry-run behavior, verified archive copies, digest-gated deletion, destination collision, and symlink/directory rejection.
+
+This is not yet a complete retention service: there is no scheduler, immutable external audit store, multi-user authorization, directory-level retention policy, or legal hold workflow. Use deletion only on dedicated, backed-up evidence paths.
