@@ -70,9 +70,13 @@ def create_approval(database: Path, *, run_id: str, report_sha256: str, actor: s
         raise ValueError("decision must be APPROVE or REJECT")
     blockers = []
     if decision == "APPROVE" and require_separation:
-        if actor.strip() == (run_operator or "").strip():
+        if not isinstance(run_operator, str) or not run_operator.strip():
+            blockers.append("Run operator identity is required to enforce separation of duties")
+        elif actor.strip() == run_operator.strip():
             blockers.append("Approver must differ from the run operator")
-        if actor.strip() == (policy_author or "").strip():
+        if not isinstance(policy_author, str) or not policy_author.strip():
+            blockers.append("Policy author identity is required to enforce separation of duties")
+        elif actor.strip() == policy_author.strip():
             blockers.append("Approver must differ from the policy author")
     status = "BLOCKED" if blockers else ("APPROVED" if decision == "APPROVE" else "REJECTED")
     approval_id = str(uuid.uuid4())
