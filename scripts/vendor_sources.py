@@ -105,7 +105,7 @@ def read_marker(destination: Path) -> dict[str, Any] | None:
         return None
 
 
-def sync(item: dict[str, Any]) -> None:
+def sync(item: dict[str, Any]) -> str:
     destination = ROOT / item["destination"]
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
@@ -154,6 +154,7 @@ def sync(item: dict[str, Any]) -> None:
             shutil.rmtree(destination)
         shutil.move(str(staged), str(destination))
     print(f"SNAPSHOTTED {item['name']} commit={actual} tree_sha256={digest} -> {item['destination']}")
+    return digest
 def verify(item: dict[str, Any]) -> bool:
     destination = ROOT / item["destination"]
     marker = read_marker(destination)
@@ -168,6 +169,7 @@ def verify(item: dict[str, Any]) -> bool:
         and marker.get("revision") == item["revision"]
         and marker.get("excluded_paths", []) == item.get("exclude_paths", [])
         and marker.get("tree_sha256") == actual_digest
+        and item.get("tree_sha256") == actual_digest
     )
     print(f"{'OK' if expected else 'MISMATCH'} {item['name']} revision={marker.get('revision')} tree_sha256={actual_digest}")
     return expected
@@ -198,7 +200,10 @@ def main() -> int:
         if ns.command == "sync":
             git_available()
             for item in sources:
-                sync(item)
+                digest = sync(item)
+                item["tree_sha256"] = digest
+            if sources:
+                MANIFEST.write_text(json.dumps(manifest, indent=2) + chr(10), encoding="utf-8")
             if artifacts:
                 print("Binary artifact download is intentionally not implemented here; acquire it through an approved process, then place it at the manifest destination and run verify.")
             return 0
