@@ -50,7 +50,7 @@ This tracker separates code that exists from complete acceptance of the original
 | 33 | Workspace path containment | Implemented baseline | Continue TOCTOU and platform-specific path testing |
 | 34 | Secret-safe logging | Implemented baseline | Add more secret formats and test all report/log sinks |
 | 35 | Dependency inventory / SBOM | Partial | SBOM now includes installed Python distributions plus native EDA tool PATH presence and declared integration tiers; binary digests/versions, OS packages, PDK metadata, licensing validation, and official schema validation remain |
-| 36 | License and notice inventory | Partial | Enforce notices at release packaging and complete legal redistribution review |
+| 36 | License and notice inventory | Partial | CLI inventories license/notice-like files, hashes them, extracts explicit SPDX tags, and flags manual-review files; complete source coverage, dependency mapping, compatibility checks and legal review remain |
 | 37 | Signed build provenance | Partial | Bind build artifacts to builder identity and signed provenance/trust roots |
 | 38 | Customer-managed worker mode | Partial | Complete control-plane/worker separation and prove RTL never leaves the customer host |
 | 39 | Role and action audit | Implemented baseline | Protect storage and connect authenticated actors in deployed services |
@@ -155,3 +155,8 @@ The normal `verify` path and local queue worker now attach a run-identity envelo
 ## Latest incremental implementation — automatic provenance output
 
 Every standard `verify` run and local queued worker now writes `provenance.json` beside the report. The record binds the run ID/fingerprint and source revision where available to the report's SHA-256, size and filename label. The provenance JSON itself is not signed, and the current report link does not include an evidence bundle; use detached evidence signing and independently pinned trust keys when authenticity is required.
+
+
+## Latest incremental implementation — license/notice inventory
+
+Run `python -m mqv_eda license-inventory ./vendor --out license-inventory.json` to hash license/notice-like files and extract explicit SPDX identifiers where present. Files without an SPDX tag are marked for manual review; symlinks are rejected. This is a discovery aid only: it does not infer license permission, determine compatibility, or replace upstream notice preservation and legal review.
