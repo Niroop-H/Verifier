@@ -35,7 +35,7 @@ This tracker separates code that exists from complete acceptance of the original
 | 18 | Baseline freshness rules | Partial | Fail-closed CLI gate now checks baseline run timestamp, max age, and source revision equality; policy-driven rerun execution and baseline approval workflow remain |
 | 19 | Change-impact rule mapping | Partial | Dependency-aware mappings and explicit integration with skipped checks |
 | 20 | Decision explanation report | Implemented baseline | Add richer HTML rendering and integration |
-| 21 | Regression history and trend view | Partial | Persistent run store and trend visualizations |
+| 21 | Regression history and trend view | Partial | New accessible HTML dashboard summarizes supplied reports, durations and status counts; persistent run store, true time-series charts and filtering remain |
 | 22 | Changed-check detection | Implemented baseline | Add more input and requirement-change cases |
 | 23 | Failure clustering | Implemented baseline | Tune against real logs and preserve links to source artifacts |
 | 24 | Deterministic log triage | Implemented baseline | Broaden fixture coverage and adapter-specific patterns |
@@ -64,7 +64,7 @@ This tracker separates code that exists from complete acceptance of the original
 | 47 | Tool adapter contract tests | Implemented baseline | Expand per-tool/version matrix and real-tool regression coverage |
 | 48 | User-facing failure explanations | Implemented baseline | Expand grounded guidance while retaining raw logs and uncertainty labels |
 | 49 | Accessibility and keyboard-first UI | Not implemented | This repository is currently a Python CLI/engine; a UI must exist before UI accessibility can be implemented |
-| 50 | Benchmark and acceptance dashboard | Partial | Generate a dashboard from verified CI/test evidence and supported-tool manifests |
+| 50 | Benchmark and acceptance dashboard | Partial | New script-free accessible HTML dashboard renders historical report summaries; verified CI evidence ingestion, benchmark acceptance thresholds, and supported-tool manifests remain |
 
 ## New CLI capabilities
 
@@ -175,3 +175,8 @@ Run `python -m mqv_eda repro-check ./rtl-project --runs 3 --out ./repro-evidence
 ## Latest incremental implementation — durable approval register
 
 Use `python -m mqv_eda approvals --db .mqv/approvals.sqlite3 create --run-id RUN_ID --report-sha256 SHA256 --actor REVIEWER --role release-reviewer --decision APPROVE --rationale "Evidence reviewed" --run-operator OPERATOR --policy-author POLICY_AUTHOR`. Approval decisions and event history are stored in SQLite. The command blocks an approval when the actor matches the supplied run operator or policy author. This is a local governance record, not cryptographic proof of identity or a fabrication authorization system.
+
+
+## Latest incremental implementation — regression history dashboard
+
+Run `python -m mqv_eda history-dashboard report-1.json report-2.json --out regression-dashboard.html` to render an accessible, responsive, script-free HTML dashboard from supplied reports. It summarizes historical check counts, overall status and duration, with semantic table headers and a clear limitation statement. The dashboard does not rerun tests or independently verify the supplied reports.
