@@ -12,7 +12,7 @@ from .tool_catalog import list_tool_catalog
 from .report_analysis import compare_reports, triage_log, write_json
 from .evidence_bundle import create_bundle, verify_bundle
 from .evidence_signing import sign_bundle, verify_bundle_signature
-from .governance import create_run_identity, evaluate_policy, generate_sbom, inventory_inputs
+from .governance import create_run_identity, evaluate_policy, generate_sbom, inventory_inputs, evaluate_baseline_freshness
 from .regression_intelligence import cluster_failures, detect_flaky_runs, ingest_cobertura_coverage
 from .operations import (build_provenance, cleanup_workspace, estimate_resources, evaluate_approval, evidence_scorecard, map_change_impact, record_retention_action, apply_retention_action, validate_waiver)
 from .quality_gates import evaluate_mutation_results, validate_golden_corpus
@@ -71,6 +71,12 @@ def build_parser() -> argparse.ArgumentParser:
     policy.add_argument("policy_file", type=Path)
     policy.add_argument("--dry-run", action="store_true", help="Produce advisory preview; never grants approval")
     policy.add_argument("--out", type=Path, default=Path("mqv-policy-decision.json"))
+    baseline = sub.add_parser("baseline-freshness", help="Fail closed on stale or unverifiable report baselines")
+    baseline.add_argument("baseline_report", type=Path)
+    baseline.add_argument("current_report", type=Path)
+    baseline.add_argument("--max-age-seconds", type=int, default=604800)
+    baseline.add_argument("--allow-revision-change", action="store_true")
+    baseline.add_argument("--out", type=Path, default=Path("mqv-baseline-freshness.json"))
     sbom = sub.add_parser("sbom", help="Generate a dependency inventory for the active Python environment")
     sbom.add_argument("--out", type=Path, default=Path("mqv-sbom.json"))
     flaky = sub.add_parser("flaky", help="Compare repeated reports for outcome variation")
@@ -375,6 +381,13 @@ def main(argv: list[str] | None = None) -> int:
                 if not isinstance(config, dict) or not isinstance(toolchain, dict):
                     raise ValueError("--config and --toolchain must each contain a JSON object")
                 result = create_run_identity(args.source, configuration=config, toolchain=toolchain)
+            elif args.command == "baseline-freshness":
+                baseline_report = json.loads(args.baseline_report.read_text(encoding="utf-8"))
+                current_report = json.loads(args.current_report.read_text(encoding="utf-8"))
+                result = evaluate_baseline_freshness(
+                    baseline_report, current_report, max_age_seconds=args.max_age_seconds,
+                    require_same_revision=not args.allow_revision_change,
+                )
             elif args.command == "policy":
                 report = json.loads(args.report.read_text(encoding="utf-8"))
                 policy_doc = json.loads(args.policy_file.read_text(encoding="utf-8"))
