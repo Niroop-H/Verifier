@@ -411,7 +411,25 @@ def main(argv: list[str] | None = None) -> int:
                               sim_top=args.sim_top, netlist=args.netlist, liberty=args.liberty,
                               sdc=args.sdc, gds=args.gds, drc_deck=args.drc_deck,
                               lvs_deck=args.lvs_deck, lvs_netlist=args.lvs_netlist, timeout=args.timeout)
-        paths = write_reports(args.out, results, {"source": str(args.source.resolve()), "top": args.top})
+        # Capture the declared toolchain and bind evidence to a stable input snapshot.
+        # The snapshot is an execution record, not a guarantee that every optional tool ran.
+        project_root = (args.source.resolve() if args.source.is_dir()
+                        else (args.out / "workspace" / "source").resolve())
+        toolchain_snapshot = discover_tools()
+        run_identity = create_run_identity(
+            project_root,
+            configuration={
+                "top": args.top, "sim_top": args.sim_top,
+                "testbenches": [str(p) for p in (args.testbench or [])],
+                "timeout_seconds": args.timeout,
+            },
+            toolchain=toolchain_snapshot,
+        )
+        paths = write_reports(args.out, results, {
+            "source": str(args.source.resolve()), "top": args.top,
+            "toolchain_snapshot": toolchain_snapshot,
+            "run_identity": run_identity,
+        })
     except (OSError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
