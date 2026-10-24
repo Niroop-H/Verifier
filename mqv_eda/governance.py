@@ -202,16 +202,30 @@ def generate_sbom(*, include_environment: bool = True) -> dict[str, Any]:
     native_tools = []
     for spec in TOOL_SPECS:
         resolved = shutil.which(spec.executable)
+        binary_digest = None
+        digest_state = "NOT_FOUND"
+        if resolved:
+            try:
+                executable_path = Path(resolved)
+                if executable_path.is_file():
+                    binary_digest = sha256_file(executable_path)
+                    digest_state = "HASHED"
+                else:
+                    digest_state = "NOT_A_REGULAR_FILE"
+            except OSError:
+                digest_state = "HASH_ERROR"
         native_tools.append({
             "key": spec.key,
             "executable": spec.executable,
             "resolved_path": resolved,
             "state": "PATH_PRESENT" if resolved else "NOT_FOUND",
+            "binary_sha256": binary_digest,
+            "binary_digest_state": digest_state,
             "purpose": spec.purpose,
             "tier": spec.tier,
             "integration_level": spec.integration_level,
             "version": None,
-            "limitations": ["Presence only; version, binary digest, license, and runtime health are not verified."],
+            "limitations": ["Binary digest is a local content hash, not vendor attestation; version, license, and runtime health are not verified."],
         })
     return {
         "bomFormat": "CycloneDX",
@@ -229,7 +243,7 @@ def generate_sbom(*, include_environment: bool = True) -> dict[str, Any]:
         "native_tools_found_on_path": sum(item["state"] == "PATH_PRESENT" for item in native_tools),
         "limitations": [
             "Python components cover distributions visible to this interpreter only.",
-            "Native tool inventory records PATH presence only; it is not a trusted binary or version attestation.",
+            "Native tool inventory records PATH presence and a local executable digest where readable; it is not a trusted binary or version attestation.",
             "OS packages, FPGA vendor tools, proprietary EDA installations, and PDK contents may be incomplete.",
             "Missing license metadata is unknown, not permission to redistribute.",
             "Validate the component section against the official CycloneDX schema before claiming schema conformance.",
