@@ -17,10 +17,11 @@ def build_evidence_manifest(
     *,
     generated_utc: str | None = None,
 ) -> dict[str, Any]:
-    """Build an evidence manifest with input and log digests for a run.
+    """Build a manifest for a verification run.
 
-    Recorded hashes identify observed bytes. They do not prove design correctness,
-    tool trustworthiness, or that a verification run was complete.
+    Both the check-time digest and the generation-time digest are retained when
+    an input remains available. This can expose input changes during a run.
+    Hashes identify bytes; they do not prove design correctness or tool trust.
     """
     root = Path(output_dir).resolve()
     checks: list[dict[str, Any]] = []
@@ -28,15 +29,19 @@ def build_evidence_manifest(
     for result in results:
         inputs: list[dict[str, Any]] = []
         for source_path, expected_hash in sorted(result.input_hashes.items()):
+            source = Path(source_path)
+            inside_bundle = _within(source, root)
             item: dict[str, Any] = {
                 "path": _display_path(source_path, root),
+                "bundled": inside_bundle,
                 "sha256_at_check_time": expected_hash,
             }
             try:
-                source = Path(source_path)
                 if source.is_file():
-                    item["observed_sha256"] = sha256_file(source)
+                    observed = sha256_file(source)
+                    item["observed_sha256"] = observed
                     item["exists_at_manifest_time"] = True
+                    item["changed_since_check"] = observed != expected_hash
                 else:
                     item["exists_at_manifest_time"] = False
             except OSError:
@@ -50,6 +55,7 @@ def build_evidence_manifest(
                 try:
                     log = {
                         "path": _display_path(str(log_path), root),
+                        "bundled": _within(log_path, root),
                         "sha256": sha256_file(log_path),
                         "size_bytes": log_path.stat().st_size,
                     }
@@ -83,26 +89,38 @@ def build_evidence_manifest(
     }
 
 
-def _display_path(value: str, root: Path) -> str:
-    """Return relative artifact paths and avoid disclosing host paths for externals."""
+def _within(path: Path, root: Path) -> bool:
     try:
-        return Path(value).resolve().relative_to(root).as_posix()
+        Path(path).resolve().relative_to(root)
+        return True
     except (OSError, ValueError):
-        return Path(value).name
+        return False
+
+
+def _display_path(value: str, root: Path) -> str:
+    """Return a relative path for bundled files and basename for external files."""
+    path = Path(value)
+    try:
+        return path.resolve().relative_to(root).as_posix()
+    except (OSError, ValueError):
+        return path.name
 
 
 def _safe_relative(root: Path, value: str) -> Path | None:
-    candidate = (root / value).resolve()
-    if not candidate.is_relative_to(root):
+    try:
+        candidate = (root / value).resolve()
+        candidate.relative_to(root)
+        return candidate
+    except (OSError, ValueError):
         return None
-    return candidate
 
 
 def verify_evidence_manifest(path: Path) -> dict[str, Any]:
-    """Verify hashes for referenced files present relative to a manifest.
+    """Verify bundled inputs/logs; fail for missing bundled evidence.
 
-    Only files whose references remain within the manifest directory are opened.
-    A recorded file is never considered valid merely because it is missing.
+    External source inputs are represented by basename only to avoid leaking
+    machine paths. They cannot be re-verified from this bundle, so this function
+    reports them as EXTERNAL_UNVERIFIABLE rather than claiming integrity.
     """
     path = Path(path)
     document = json.loads(path.read_text(encoding="utf-8"))
@@ -132,11 +150,18 @@ def verify_evidence_manifest(path: Path) -> dict[str, Any]:
         for item in check.get("inputs", []):
             expected = item.get("observed_sha256")
             rel = item.get("path")
-            if expected and rel:
-                verify_one(str(rel), str(expected))
+            if not expected or not rel:
+                continue
+            if item.get("bundled") is False:
+                problems.append({"path": str(rel), "status": "EXTERNAL_UNVERIFIABLE"})
+                continue
+            verify_one(str(rel), str(expected))
         log = check.get("log")
         if log and log.get("path") and log.get("sha256"):
-            verify_one(str(log["path"]), str(log["sha256"]))
+            if log.get("bundled") is False:
+                problems.append({"path": str(log["path"]), "status": "EXTERNAL_UNVERIFIABLE"})
+            else:
+                verify_one(str(log["path"]), str(log["sha256"]))
 
     return {
         "schema_version": MANIFEST_SCHEMA_VERSION,
@@ -145,7 +170,8 @@ def verify_evidence_manifest(path: Path) -> dict[str, Any]:
         "items_checked": checked,
         "problems": problems,
         "note": (
-            "Integrity verification covers referenced files only; it does not "
-            "validate design correctness or the trustworthiness of the original run."
+            "Integrity verification covers bundled referenced files only. External "
+            "inputs must be supplied in the evidence bundle to be independently re-hashed. "
+            "This does not validate design correctness or the original execution environment."
         ),
     }
