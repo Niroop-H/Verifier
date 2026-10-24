@@ -130,7 +130,8 @@ def main(argv: list[str] | None = None) -> int:
             lvs_netlist=args.lvs_netlist,
             timeout=args.timeout,
         )
-        metadata = {"source": str(args.source.resolve()), "top": args.top}
+        # Keep host-specific absolute paths out of customer-facing reports.
+        metadata = {"source": args.source.name, "top": args.top}
         paths = write_reports(args.out, results, metadata)
         manifest = build_evidence_manifest(
             args.out,
