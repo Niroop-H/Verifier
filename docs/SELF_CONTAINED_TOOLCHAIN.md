@@ -4,7 +4,7 @@
 
 MAH Quantum Verify should build and execute from controlled, reviewed inputs without fetching source repositories during a customer verification run. The goal is reproducibility and source custody, not an arbitrary line-count target.
 
-The manifest and source-vendor utility materialize selected upstream source files into `vendor/src/`, where the outer MAH Quantum Verify repository can track them as ordinary files. Each snapshot retains upstream notices and has a provenance marker with its exact source URL, immutable commit SHA, and deterministic tree digest. This does **not** yet mean every EDA tool is vendored or that the platform is fully offline.
+The manifest and source-vendor utility materialize selected upstream source files into `vendor/src/`, where the outer MAH Quantum Verify repository can track them as ordinary files. Large PDK/platform collateral is deliberately separated into optional packs instead of blindly copying multi-gigabyte technology data into the core product repository. Each snapshot retains upstream notices and has a provenance marker with its exact source URL, immutable commit SHA, and deterministic tree digest. This does **not** yet mean every EDA tool is vendored or that the platform is fully offline.
 
 ## Commands
 
@@ -36,7 +36,7 @@ The manifest starts with three source repositories already referenced by existin
 1. **Inventory every dependency.** Include executables, Python packages, build tools, libraries, test fixtures, CI downloads, PDK collateral, Liberty files, rule decks, container base images, and generated artifacts.
 2. **Pin everything.** Use immutable Git commit IDs or versioned release artifacts with cryptographic hashes. A tag or branch alone is not an immutable pin.
 3. **Resolve license and redistribution rights.** Preserve copyright, attribution, and license files. Review dependencies transitively; a permissive top-level project does not automatically make every dependency permissive.
-4. **Materialize and commit the actual source trees.** Run the sync utility in a controlled clone, review the resulting diff and repository size, then commit the source files through the approved PR workflow. This PR adds the mechanism, not the millions of upstream source lines themselves.
+4. **Materialize and commit the actual source trees.** Run the sync utility in a controlled clone, review the resulting diff and repository size, then commit the source files through the approved PR workflow. The import workflow measures source volume and refuses oversized files or an excessive combined source tree. If a tool contains bulky PDKs, libraries, or generated collateral, those must be separately pinned and reviewed as optional packs rather than forcing the whole payload into one Git repository.
 5. **Build from a clean network-disabled environment.** Use a staged dependency cache or approved source archive. Product runtime must not invoke Git, curl, wget, or package managers to fetch missing tools.
 6. **Create reproducible toolchain images.** Pin OS/container images by digest, record compiler/build flags, and produce a software bill of materials and provenance record.
 7. **Separate proprietary product code from upstream components.** Keep original MAH Quantum modules, interfaces, algorithms, UX, evidence engine, and orchestration clearly identified. Do not strip or replace third-party notices.
