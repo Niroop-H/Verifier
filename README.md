@@ -84,6 +84,31 @@ Analyze a tool log using deterministic, evidence-linked patterns:
 
 ```bash
 python -m mqv_eda triage build/demo/logs/RTL_COMPILE.log --out build/triage.json
+
+### Engineering governance and regression workflows
+
+```bash
+# Bind a report to input/configuration/toolchain identity and emit provenance
+python -m mqv_eda verify fixtures/projects/good --top comb --testbench tb_comb.v --sim-top tb_comb --out build/demo
+python -m mqv_eda sign-provenance build/demo/provenance.json --private-key keys/provenance-private.pem --signature build/demo/provenance.sig
+
+# Execute controlled reruns and compare check outcomes
+python -m mqv_eda repro-check fixtures/projects/good --runs 3 --top comb --testbench tb_comb.v --sim-top tb_comb --out build/repro
+
+# Review baseline freshness, license notices and historical regressions
+python -m mqv_eda baseline-freshness baseline/report.json candidate/report.json --max-age-seconds 604800
+python -m mqv_eda license-inventory vendor --out build/license-inventory.json
+python -m mqv_eda history-dashboard build/demo/report.json build/repro/run-01/report.json --out build/regression-dashboard.html
+
+# Execute one locally queued verification job
+python -m mqv_eda jobs --db .mqv/jobs.sqlite3 submit job-payload.json
+python -m mqv_eda jobs --db .mqv/jobs.sqlite3 run-once --worker-id local-worker
+
+# Record a review decision against an exact report digest
+python -m mqv_eda approvals --db .mqv/approvals.sqlite3 create --run-id RUN_ID --report-sha256 REPORT_SHA256 --actor REVIEWER --role release-reviewer --decision APPROVE --rationale "Evidence reviewed" --run-operator OPERATOR --policy-author POLICY_AUTHOR
+```
+
+These workflows provide local evidence, governance and repeatability controls. They do not authenticate local actor labels, prove bit-for-bit reproducibility, or authorize tape-out/fabrication. Review each command's generated evidence and documented limitations.
 ```
 
 Triage suggestions are heuristics, not proven root causes. They include matching log lines and hashes so an engineer can inspect the original evidence. Neither command independently validates the underlying EDA result.
