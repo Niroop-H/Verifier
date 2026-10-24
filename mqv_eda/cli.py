@@ -11,6 +11,7 @@ from .pdks import inspect_profile, list_profiles
 from .tool_catalog import list_tool_catalog
 from .report_analysis import compare_reports, triage_log, write_json
 from .evidence_bundle import create_bundle, verify_bundle
+from .evidence_signing import sign_bundle, verify_bundle_signature
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mqv-eda", description="MAH Quantum Verify local EDA verification runner")
@@ -31,6 +32,14 @@ def build_parser() -> argparse.ArgumentParser:
     bundle_create.add_argument("--project", help="Optional non-sensitive project label")
     bundle_verify = bundle_sub.add_parser("verify", help="Verify a bundle and its file hashes")
     bundle_verify.add_argument("archive", type=Path)
+    sign = sub.add_parser("sign-evidence", help="Create a detached OpenSSL signature for an evidence bundle")
+    sign.add_argument("bundle", type=Path)
+    sign.add_argument("--private-key", type=Path, required=True)
+    sign.add_argument("--signature", type=Path, required=True)
+    sigverify = sub.add_parser("verify-evidence-signature", help="Verify a detached evidence signature")
+    sigverify.add_argument("bundle", type=Path)
+    sigverify.add_argument("--public-key", type=Path, required=True)
+    sigverify.add_argument("--signature", type=Path, required=True)
     compare = sub.add_parser("compare", help="Compare two JSON evidence reports and identify regressions")
     compare.add_argument("baseline", type=Path)
     compare.add_argument("candidate", type=Path)
@@ -73,6 +82,22 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "tool-catalog":
         print(json.dumps(list_tool_catalog(), indent=2))
         return 0
+    if args.command == "sign-evidence":
+        try:
+            result = sign_bundle(args.bundle, args.private_key, args.signature)
+        except (OSError, ValueError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2))
+        return 0
+    if args.command == "verify-evidence-signature":
+        try:
+            result = verify_bundle_signature(args.bundle, args.public_key, args.signature)
+        except (OSError, ValueError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2))
+        return 0 if result["valid"] else 2
     if args.command == "bundle":
         try:
             if args.bundle_action == "create":
