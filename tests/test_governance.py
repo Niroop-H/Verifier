@@ -77,7 +77,11 @@ def test_sbom_marks_unknown_license_instead_of_assuming_permission():
     assert result["native_tool_count"] == len(result["native_tool_inventory"])
     assert all(item["state"] in {"PATH_PRESENT", "NOT_FOUND"} for item in result["native_tool_inventory"])
     assert all(item["version"] is None for item in result["native_tool_inventory"])
-    assert "PATH presence only" in " ".join(result["limitations"])
+    assert all(item["binary_sha256"] is None or len(item["binary_sha256"]) == 64
+               for item in result["native_tool_inventory"])
+    assert all(item["binary_digest_state"] in {"HASHED", "NOT_FOUND", "NOT_A_REGULAR_FILE", "HASH_ERROR"}
+               for item in result["native_tool_inventory"])
+    assert "local executable digest" in " ".join(result["limitations"])
 
 
 def test_inventory_is_json_serializable(tmp_path):
