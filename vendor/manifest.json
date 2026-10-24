@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "policy": {
+    "network_required_for_sync_only": true,
+    "runtime_must_not_fetch_sources": true,
+    "require_full_git_history": true,
+    "preserve_upstream_license_files": true,
+    "never_relabel_upstream_code_as_mahar_quantum_owned": true
+  },
+  "sources": [
+    {
+      "name": "symbiyosys",
+      "repository": "https://github.com/YosysHQ/sby.git",
+      "revision": "79fc9eddca5e33a28cc2f2cd19c9825efd9a7255",
+      "destination": "vendor/src/symbiyosys",
+      "license_review": "required",
+      "purpose": "Formal verification task orchestration",
+      "notes": "Existing repository provenance records this exact commit. Re-check its license and transitive dependency obligations before redistribution."
+    },
+    {
+      "name": "opensta",
+      "repository": "https://github.com/parallaxsw/OpenSTA.git",
+      "revision": "bdc4e054cb917e1b7058444829191838b302cccd",
+      "destination": "vendor/src/opensta",
+      "license_review": "required",
+      "purpose": "Static timing analysis",
+      "notes": "Existing CI checks out this exact commit. Build dependencies such as CUDD must be separately pinned and reviewed."
+    },
+    {
+      "name": "openroad-flow-scripts",
+      "repository": "https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts.git",
+      "revision": "eda8e552974d47a12616294dddf4012d892548d3",
+      "destination": "vendor/src/openroad-flow-scripts",
+      "license_review": "required",
+      "purpose": "Reproducible reference flow collateral and synthetic timing fixture provenance",
+      "notes": "Existing repository provenance records this exact commit. Review licenses for each selected library, PDK and generated artifact independently."
+    }
+  ],
+  "binary_artifacts": [
+    {
+      "name": "oss-cad-suite-linux-x64",
+      "version": "2026-10-22",
+      "url": "https://github.com/YosysHQ/oss-cad-suite-build/releases/download/2026-10-22/oss-cad-suite-linux-x64-20261022.tgz",
+      "sha256": "45b7401d677f1e6cffb19dcaafb8e92c95a49dfc05b332ae4d00b84c94f62f6e",
+      "destination": "vendor/artifacts/oss-cad-suite-linux-x64-20261022.tgz",
+      "license_review": "required",
+      "purpose": "Pinned evaluation toolchain distribution",
+      "notes": "Checksum is from the repository's existing CI configuration. Verify the upstream release and redistribution terms before bundling it into a customer installer."
+    }
+  ]
+}
