@@ -189,14 +189,28 @@ def verify_artifact(item: dict[str, Any]) -> bool:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("sync", "verify", "status"))
-    parser.add_argument("--name", help="Operate on one named source or binary artifact")
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--name", help="Operate on one named source or binary artifact")
+    selection.add_argument("--pack", help="Operate on a named source pack from vendor/manifest.json")
     ns = parser.parse_args()
     try:
         manifest = load_manifest()
-        sources = [x for x in manifest["sources"] if not ns.name or x["name"] == ns.name]
-        artifacts = [x for x in manifest.get("binary_artifacts", []) if not ns.name or x["name"] == ns.name]
+        known_packs = {item.get("pack") for item in manifest["sources"] if item.get("pack")}
+        if ns.pack and ns.pack not in known_packs:
+            parser.error(f"Unknown source pack: {ns.pack}. Choose from: {', '.join(sorted(known_packs))}")
+        sources = [
+            item for item in manifest["sources"]
+            if (not ns.name or item["name"] == ns.name)
+            and (not ns.pack or item.get("pack") == ns.pack)
+        ]
+        artifacts = [
+            item for item in manifest.get("binary_artifacts", [])
+            if not ns.pack and (not ns.name or item["name"] == ns.name)
+        ]
         if ns.name and not sources and not artifacts:
             parser.error(f"Unknown dependency name: {ns.name}")
+        if ns.pack and not sources:
+            parser.error(f"Source pack has no entries: {ns.pack}")
         if ns.command == "sync":
             git_available()
             for item in sources:
