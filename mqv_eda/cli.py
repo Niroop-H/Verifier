@@ -219,6 +219,14 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument("--lvs-netlist", type=Path, help="Reference source netlist for LVS")
     verify.add_argument("--out", type=Path, default=Path("mqv-report"))
     verify.add_argument("--timeout", type=float, default=120)
+    repro = sub.add_parser("repro-check", help="Execute repeated runs and compare verification outcomes")
+    repro.add_argument("source", type=Path)
+    repro.add_argument("--runs", type=int, default=3)
+    repro.add_argument("--top")
+    repro.add_argument("--testbench", type=Path, action="append", default=[])
+    repro.add_argument("--sim-top")
+    repro.add_argument("--timeout", type=float, default=120)
+    repro.add_argument("--out", type=Path, default=Path("mqv-repro-check"))
     return parser
 
 def main(argv: list[str] | None = None) -> int:
@@ -505,6 +513,94 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "validate-config":
             return 0 if result["valid"] else 2
         return 0
+    if args.command == "repro-check":
+        try:
+            if args.runs < 2 or args.runs > 10:
+                raise ValueError("--runs must be between 2 and 10")
+            source = args.source.resolve()
+            out_root = args.out.resolve()
+            if source.is_dir():
+                try:
+                    out_root.relative_to(source)
+                    raise ValueError("Output directory must not be inside the source project")
+                except ValueError as exc:
+                    if str(exc) == "Output directory must not be inside the source project":
+                        raise
+            if not source.exists():
+                raise ValueError("Source path does not exist")
+            toolchain_snapshot = discover_tools()
+            run_records = []
+            reference_fingerprint = None
+            for index in range(1, args.runs + 1):
+                run_dir = out_root / f"run-{index:02d}"
+                if source.is_dir():
+                    fingerprint = inventory_inputs(source)["input_fingerprint_sha256"]
+                    project_root = source
+                elif source.is_file() and source.suffix.lower() == ".zip":
+                    from .governance import sha256_file
+                    fingerprint = sha256_file(source)
+                    project_root = (run_dir / "workspace" / "source").resolve()
+                else:
+                    raise ValueError("Source must be a project directory or ZIP archive")
+                if reference_fingerprint is None:
+                    reference_fingerprint = fingerprint
+                results = run_project(source, run_dir, top=args.top, testbenches=args.testbench,
+                                      sim_top=args.sim_top, timeout=args.timeout)
+                if not source.is_dir():
+                    project_root = (run_dir / "workspace" / "source").resolve()
+                identity = create_run_identity(
+                    project_root,
+                    configuration={"top": args.top, "sim_top": args.sim_top,
+                                   "testbenches": [str(p) for p in args.testbench],
+                                   "timeout_seconds": args.timeout, "repro_run_index": index},
+                    toolchain=toolchain_snapshot,
+                )
+                paths = write_reports(run_dir, results, {
+                    "repro_run_index": index, "input_fingerprint_sha256": fingerprint,
+                    "toolchain_snapshot": toolchain_snapshot, "run_identity": identity,
+                })
+                provenance = build_provenance(project_root, run_identity=identity, report_path=paths["json"])
+                (run_dir / "provenance.json").write_text(
+                    json.dumps(provenance, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+                signature = [
+                    {"stage": r.stage, "status": r.status.value, "required": r.required,
+                     "exit_code": r.exit_code}
+                    for r in sorted(results, key=lambda item: (item.stage, item.required))
+                ]
+                run_records.append({
+                    "run_index": index, "overall_status": aggregate_status(results).value,
+                    "input_fingerprint_sha256": fingerprint, "check_signature": signature,
+                    "report_json": str(paths["json"]), "provenance_json": str(run_dir / "provenance.json"),
+                })
+            fingerprints = {record["input_fingerprint_sha256"] for record in run_records}
+            signatures = {json.dumps(record["check_signature"], sort_keys=True) for record in run_records}
+            if len(fingerprints) != 1:
+                status = "INPUTS_CHANGED"
+            elif len(signatures) != 1:
+                status = "NONDETERMINISTIC_OUTCOME"
+            else:
+                status = "REPRODUCIBLE_OUTCOME"
+            summary = {
+                "schema": "mqv-repro-check/1.0", "status": status,
+                "runs_requested": args.runs, "runs_completed": len(run_records),
+                "input_fingerprint_stable": len(fingerprints) == 1,
+                "outcome_signature_stable": len(signatures) == 1,
+                "runs": run_records,
+                "limitations": [
+                    "This compares check outcomes, not byte-for-byte report, waveform, netlist, or layout reproducibility.",
+                    "A stable outcome does not prove the RTL is correct or fabrication-ready.",
+                    "Only checks actually executed and recorded by the engine are compared.",
+                ],
+            }
+            out_root.mkdir(parents=True, exist_ok=True)
+            summary_path = out_root / "reproducibility-summary.json"
+            summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+            print(json.dumps(summary, indent=2, sort_keys=True))
+            print(f"Evidence: {summary_path}")
+            return 0 if status == "REPRODUCIBLE_OUTCOME" else 1
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
     try:
         results = run_project(args.source, args.out, top=args.top, testbenches=args.testbench,
                               sim_top=args.sim_top, netlist=args.netlist, liberty=args.liberty,
