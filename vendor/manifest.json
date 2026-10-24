@@ -33,7 +33,10 @@
       "destination": "vendor/src/openroad-flow-scripts",
       "license_review": "required",
       "purpose": "Reproducible reference flow collateral and synthetic timing fixture provenance",
-      "notes": "Existing repository provenance records this exact commit. Review licenses for each selected library, PDK and generated artifact independently."
+      "notes": "Curated source snapshot excludes flow/platforms PDK and library collateral to keep the core repository maintainable. Platform collateral must be separately pinned, license-reviewed, and packaged as optional platform packs before physical-design flows are claimed operational.",
+      "exclude_paths": [
+        "flow/platforms"
+      ]
     },
     {
       "name": "yosys",
