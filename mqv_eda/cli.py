@@ -293,6 +293,7 @@ def main(argv: list[str] | None = None) -> int:
                                             error=None if terminal == "SUCCEEDED" else overall.value)
                         result["report_json"] = str(paths["json"])
                         result["report_html"] = str(paths["html"])
+                        result["provenance_json"] = str(output_dir / "provenance.json")
                     except Exception as exc:
                         finish_job(args.db, job["id"], worker_id=args.worker_id, state="FAILED",
                                    detail="Worker execution raised an exception", error=str(exc))
@@ -515,6 +516,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{result.status.value:12} {result.stage}: {result.message}")
     print(f"JSON evidence: {paths['json']}")
     print(f"HTML report:   {paths['html']}")
+    print(f"Provenance:    {args.out / 'provenance.json'}")
     if overall == Status.PASS:
         return 0
     if overall == Status.FAIL:
