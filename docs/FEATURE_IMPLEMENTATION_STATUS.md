@@ -15,9 +15,9 @@ This tracker separates code that exists from complete acceptance of the original
 
 | # | Feature | Status | Remaining work |
 |---:|---|---|---|
-| 1 | Immutable run identity | Partial | Bind run lifecycle and immutable storage to execution engine; record end time |
+| 1 | Immutable run identity | Partial | Run identity is now attached to each standard verification report and local worker report, bound to input/config/toolchain fingerprints; immutable external storage and end-of-run lifecycle linkage remain |
 | 2 | Complete input inventory | Partial | Capture transitive includes, policy-approved environment and untracked inputs at job start |
-| 3 | Toolchain identity snapshot | Partial | Capture executable digests, adapter versions and missing-tool state in every report |
+| 3 | Toolchain identity snapshot | Partial | Standard verification and worker reports now embed tool discovery/version output and missing-tool state; executable digests, signed tool identity, and pinned adapter provenance remain |
 | 4 | Reproducible-run comparison | Partial | Execute controlled reruns and classify expected nondeterminism |
 | 5 | Evidence bundle manifest verification | Implemented baseline | Continue adversarial archive testing and release hardening |
 | 6 | Detached evidence signatures | Implemented baseline | Production trust-root and key lifecycle integration remains deployment-specific |
@@ -145,3 +145,8 @@ This is a single-host worker prototype, not a continuously supervised worker poo
 Use `python -m mqv_eda baseline-freshness baseline-report.json current-report.json --max-age-seconds 604800` to evaluate a baseline. The command blocks missing or invalid timestamps, future-dated baselines, baselines older than the configured limit, and (by default) missing or changed source revisions. It emits a JSON decision and exits non-zero for stale or unverifiable baselines. `--allow-revision-change` is an explicit override and should only be used when the release policy permits cross-revision baselines.
 
 The gate evaluates freshness metadata; it does not prove semantic equivalence, execute a rerun, or approve a release.
+
+
+## Latest incremental implementation — report-bound run identity
+
+The normal `verify` path and local queue worker now attach a run-identity envelope and toolchain discovery snapshot to the JSON report metadata. The identity binds the project input fingerprint, selected run configuration, source revision when available, and discovered toolchain snapshot. The toolchain record includes detected versions where the probe supports them and missing-tool state; it does not yet hash or cryptographically attest native executables.
