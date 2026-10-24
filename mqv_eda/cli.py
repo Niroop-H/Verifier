@@ -279,6 +279,10 @@ def main(argv: list[str] | None = None) -> int:
                             "job_id": job["id"], "worker_id": args.worker_id,
                             "toolchain_snapshot": toolchain_snapshot, "run_identity": identity,
                         })
+                        provenance = build_provenance(project_root, run_identity=identity,
+                                                      report_path=paths["json"])
+                        (output_dir / "provenance.json").write_text(
+                            json.dumps(provenance, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
                         overall = aggregate_status(results)
                         terminal = "SUCCEEDED" if overall == Status.PASS else "FAILED"
                         result = finish_job(args.db, job["id"], worker_id=args.worker_id, state=terminal,
@@ -491,6 +495,10 @@ def main(argv: list[str] | None = None) -> int:
             "toolchain_snapshot": toolchain_snapshot,
             "run_identity": run_identity,
         })
+        provenance = build_provenance(project_root, run_identity=run_identity,
+                                      report_path=paths["json"])
+        (args.out / "provenance.json").write_text(
+            json.dumps(provenance, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
     except (OSError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
