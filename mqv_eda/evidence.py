@@ -180,6 +180,18 @@ def verify_evidence_manifest(path: Path) -> dict[str, Any]:
     """
     path = Path(path)
     document = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(document, dict):
+        raise ValueError("Evidence manifest root must be a JSON object.")
+    schema_version = document.get("schema_version")
+    if schema_version != MANIFEST_SCHEMA_VERSION:
+        raise ValueError(
+            f"Unsupported evidence manifest schema_version: {schema_version!r}; "
+            f"expected {MANIFEST_SCHEMA_VERSION!r}."
+        )
+    checks_value = document.get("checks")
+    if not isinstance(checks_value, list):
+        raise ValueError("Evidence manifest 'checks' must be a JSON array.")
+
     root = path.parent.resolve()
     problems: list[dict[str, str]] = []
     checked = 0
@@ -202,8 +214,21 @@ def verify_evidence_manifest(path: Path) -> dict[str, Any]:
         if actual != expected:
             problems.append({"path": rel, "status": "HASH_MISMATCH"})
 
-    for check in document.get("checks", []):
-        for item in check.get("inputs", []):
+    for check_index, check in enumerate(checks_value):
+        if not isinstance(check, dict):
+            problems.append({"path": f"checks[{check_index}]", "status": "INVALID_CHECK_ENTRY"})
+            continue
+        inputs_value = check.get("inputs", [])
+        if not isinstance(inputs_value, list):
+            problems.append({"path": f"checks[{check_index}].inputs", "status": "INVALID_INPUT_LIST"})
+            continue
+        for input_index, item in enumerate(inputs_value):
+            if not isinstance(item, dict):
+                problems.append({
+                    "path": f"checks[{check_index}].inputs[{input_index}]",
+                    "status": "INVALID_INPUT_ENTRY",
+                })
+                continue
             rel = item.get("path")
             if not rel:
                 problems.append({"path": "<missing-path>", "status": "INVALID_MANIFEST_ENTRY"})
@@ -222,11 +247,15 @@ def verify_evidence_manifest(path: Path) -> dict[str, Any]:
                 continue
             verify_one(str(rel), str(expected))
         log = check.get("log")
-        if log and log.get("path") and log.get("sha256"):
-            if log.get("bundled") is False:
-                problems.append({"path": str(log["path"]), "status": "EXTERNAL_UNVERIFIABLE"})
-            else:
-                verify_one(str(log["path"]), str(log["sha256"]))
+        if log is not None:
+            if not isinstance(log, dict):
+                problems.append({"path": f"checks[{check_index}].log", "status": "INVALID_LOG_ENTRY"})
+                continue
+            if log.get("path") and log.get("sha256"):
+                if log.get("bundled") is False:
+                    problems.append({"path": str(log["path"]), "status": "EXTERNAL_UNVERIFIABLE"})
+                else:
+                    verify_one(str(log["path"]), str(log["sha256"]))
 
     return {
         "schema_version": MANIFEST_SCHEMA_VERSION,
