@@ -74,7 +74,7 @@ def inventory_inputs(root: Path, *, exclude_dirs: tuple[str, ...] = (
 
     # Record quoted Verilog/SystemVerilog include dependencies explicitly.
     import re
-    include_pattern = re.compile(r'(?m)^\\s*`include\\s+"([^"]+)"')
+    include_pattern = re.compile(r'(?m)^\s*`include\s+"([^"]+)"')
     include_edges: list[dict[str, str]] = []
     unresolved_includes: list[dict[str, str]] = []
     for relative, path in indexed_paths.items():
