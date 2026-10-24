@@ -371,7 +371,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, indent=2))
         print(f"Triage evidence: {args.out}")
         return 0
-    if args.command in {"inventory", "run-identity", "policy", "sbom", "flaky", "cluster-failures", "coverage", "evidence-scorecard", "provenance", "approval-record", "validate-waiver", "change-impact", "estimate-resources", "cleanup-workspace", "retention-record", "mutation-score", "golden-corpus", "history", "minimize-failures", "validate-config"}:
+    if args.command in {"inventory", "run-identity", "baseline-freshness", "policy", "sbom", "flaky", "cluster-failures", "coverage", "evidence-scorecard", "provenance", "approval-record", "validate-waiver", "change-impact", "estimate-resources", "cleanup-workspace", "retention-record", "mutation-score", "golden-corpus", "history", "minimize-failures", "validate-config"}:
         try:
             if args.command == "inventory":
                 result = inventory_inputs(args.source)
@@ -456,6 +456,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Evidence: {out_path}")
         if args.command == "policy":
             return 0 if result["eligible_for_human_review"] else 2
+        if args.command == "baseline-freshness":
+            return 0 if result["fresh"] else 2
         if args.command == "approval-record":
             return 0 if result["status"] == "APPROVED" else 2
         if args.command == "validate-waiver":
