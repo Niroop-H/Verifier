@@ -161,7 +161,7 @@ def main(argv: list[str] | None = None) -> int:
         rendered = json.dumps(result, indent=2, sort_keys=True)
         if args.out:
             args.out.parent.mkdir(parents=True, exist_ok=True)
-            args.out.write_text(rendered + "\\n", encoding="utf-8")
+            args.out.write_text(rendered + "\n", encoding="utf-8")
         print(rendered)
         return 0
     if args.command == "doctor":
