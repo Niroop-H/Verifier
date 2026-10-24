@@ -7,8 +7,8 @@ This tracker separates code that exists from complete acceptance of the original
 ## Current count
 
 - **19 implemented baselines**
-- **31 partial implementations**
-- **0 completely unimplemented items currently tracked**
+- **30 partial implementations**
+- **1 not implemented** (Feature 49: accessibility and keyboard-first UI)
 - Therefore, **31 of 50 still need work to meet their full acceptance criteria**. Partial items are not starting from zero.
 
 ## Item-by-item status
