@@ -12,6 +12,7 @@ from .tool_catalog import list_tool_catalog
 from .report_analysis import compare_reports, triage_log, write_json
 from .evidence_bundle import create_bundle, verify_bundle
 from .evidence_signing import sign_bundle, verify_bundle_signature
+from .governance import create_run_identity, evaluate_policy, generate_sbom, inventory_inputs
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mqv-eda", description="MAH Quantum Verify local EDA verification runner")
@@ -47,6 +48,21 @@ def build_parser() -> argparse.ArgumentParser:
     triage = sub.add_parser("triage", help="Produce evidence-linked deterministic suggestions from a tool log")
     triage.add_argument("log", type=Path)
     triage.add_argument("--out", type=Path, default=Path("mqv-triage.json"))
+    inventory = sub.add_parser("inventory", help="Hash project inputs and emit a stable input fingerprint")
+    inventory.add_argument("source", type=Path)
+    inventory.add_argument("--out", type=Path, default=Path("mqv-input-inventory.json"))
+    identity = sub.add_parser("run-identity", help="Create a run ID bound to inputs, config, and declared toolchain")
+    identity.add_argument("source", type=Path)
+    identity.add_argument("--config", type=Path, help="JSON configuration snapshot")
+    identity.add_argument("--toolchain", type=Path, help="JSON toolchain identity snapshot")
+    identity.add_argument("--out", type=Path, default=Path("mqv-run-identity.json"))
+    policy = sub.add_parser("policy", help="Evaluate a report against a fail-closed JSON policy")
+    policy.add_argument("report", type=Path)
+    policy.add_argument("policy_file", type=Path)
+    policy.add_argument("--dry-run", action="store_true", help="Produce advisory preview; never grants approval")
+    policy.add_argument("--out", type=Path, default=Path("mqv-policy-decision.json"))
+    sbom = sub.add_parser("sbom", help="Generate a dependency inventory for the active Python environment")
+    sbom.add_argument("--out", type=Path, default=Path("mqv-sbom.json"))
     verify = sub.add_parser("verify", help="Run applicable EDA checks on a project folder or ZIP")
     verify.add_argument("source", type=Path)
     verify.add_argument("--top", help="Explicit RTL top-level module")
