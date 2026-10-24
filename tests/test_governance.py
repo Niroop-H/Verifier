@@ -73,6 +73,11 @@ def test_sbom_marks_unknown_license_instead_of_assuming_permission():
     assert result["component_count"] == len(result["components"])
     assert all("license_status" in component for component in result["components"])
     assert "not permission to redistribute" in " ".join(result["limitations"])
+    assert result["native_tool_count"] > 0
+    assert result["native_tool_count"] == len(result["native_tool_inventory"])
+    assert all(item["state"] in {"PATH_PRESENT", "NOT_FOUND"} for item in result["native_tool_inventory"])
+    assert all(item["version"] is None for item in result["native_tool_inventory"])
+    assert "PATH presence only" in " ".join(result["limitations"])
 
 
 def test_inventory_is_json_serializable(tmp_path):
