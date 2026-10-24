@@ -34,19 +34,37 @@ The latest cited CI run completed with all three jobs successful:
 
 The suite exercises selected RTL lint, Verilog simulation, synthesis, VHDL analysis, formal proof/counterexample, static timing and DRC fixtures. Review the [technical evaluation report](docs/EVALUATION_REPORT.md), [acceptance criteria](docs/SESSION1_ACCEPTANCE.md), [tool integration matrix](docs/TOOL_INTEGRATION_MATRIX.md), [open PDK notes](docs/OPEN_PDK_SUPPORT.md), and [toolchain provenance](docs/TOOLCHAIN_PROVENANCE.md).
 
-## Quick start
+## Install and quick start
+
+### Install the packaged CLI
+
+Python 3.10 or newer is required. Download the wheel from the successful GitHub Actions run artifact named `mah-quantum-verify-python-distribution`, then install it:
+
+```bash
+python -m pip install ./mah_quantum_verify-0.1.0-py3-none-any.whl
+mqv-eda --help
+mqv-eda doctor
+mqv-eda tool-catalog
+mqv-eda pdks
+```
+
+The wheel contains the MAH Quantum Verify Python application. EDA executables are separate system dependencies and must be installed and available on `PATH` for each relevant flow. The package does not bundle commercial tools or PDK collateral.
+
+### Run the sample project from a source checkout
 
 On Linux with Python 3:
 
 ```bash
-python3 -m pip install -r requirements-dev.txt
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -r requirements-dev.txt
 python -m mqv_eda doctor
 python -m mqv_eda tool-catalog
 python -m mqv_eda pdks
 python -m mqv_eda verify fixtures/projects/good --top comb --testbench tb_comb.v --sim-top tb_comb --out build/demo
 ```
 
-EDA executables must be installed and available on PATH for their corresponding flows. See [Linux build instructions](docs/BUILD_LINUX.md) and `python -m mqv_eda --help` for current options.
+See [Linux build instructions](docs/BUILD_LINUX.md) and `python -m mqv_eda --help` for current options.
 
 ## Detached signatures for evidence bundles
 

@@ -34,6 +34,21 @@ jobs:
         run: |
           python -m compileall -q mqv_eda tests
           python -m pytest -q -rs --junitxml=unit-test-results.xml
+      - name: Build and smoke-test distributable package
+        run: |
+          python -m pip install build
+          python -m build
+          python -m venv "$RUNNER_TEMP/mqv-install-test"
+          "$RUNNER_TEMP/mqv-install-test/bin/python" -m pip install --no-deps dist/*.whl
+          "$RUNNER_TEMP/mqv-install-test/bin/mqv-eda" --help
+          "$RUNNER_TEMP/mqv-install-test/bin/python" -c "import mqv_eda; print('Installed MAH Quantum Verify', mqv_eda.__version__)"
+      - name: Upload installable release artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mah-quantum-verify-python-distribution
+          path: dist/
+          if-no-files-found: error
       - name: Upload unit test evidence
         if: always()
         uses: actions/upload-artifact@v4
