@@ -44,6 +44,17 @@ python -m mqv_eda verify fixtures/projects/good --top comb --testbench tb_comb.v
 
 EDA executables must be installed and available on PATH for their corresponding flows. See [Linux build instructions](docs/BUILD_LINUX.md) and `python -m mqv_eda --help` for current options.
 
+## Integrity-checked evidence bundles
+
+Create a ZIP package containing evidence files plus a SHA-256 manifest, then verify its contents after transfer:
+
+```bash
+python -m mqv_eda bundle create mqv-report build/aegis-evidence.zip --project demo
+python -m mqv_eda bundle verify build/aegis-evidence.zip
+```
+
+The verifier checks member paths, manifest membership, file sizes, and file hashes. This detects post-export changes relative to the included manifest; it does not authenticate the publisher because the manifest is unsigned. Do not include restricted or classified data unless the destination and transfer process are approved.
+
 ## Evidence comparison and failure triage
 
 Compare two JSON reports and write a machine-readable regression summary:
