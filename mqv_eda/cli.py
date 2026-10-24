@@ -203,6 +203,70 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, indent=2))
         print(f"Triage evidence: {args.out}")
         return 0
+    if args.command in {"inventory", "run-identity", "policy", "sbom", "flaky", "cluster-failures", "coverage", "evidence-scorecard", "provenance", "approval-record", "validate-waiver", "change-impact", "estimate-resources", "cleanup-workspace", "retention-record"}:
+        try:
+            if args.command == "inventory":
+                result = inventory_inputs(args.source)
+            elif args.command == "run-identity":
+                config = json.loads(args.config.read_text(encoding="utf-8")) if args.config else {}
+                toolchain = json.loads(args.toolchain.read_text(encoding="utf-8")) if args.toolchain else {}
+                if not isinstance(config, dict) or not isinstance(toolchain, dict):
+                    raise ValueError("--config and --toolchain must each contain a JSON object")
+                result = create_run_identity(args.source, configuration=config, toolchain=toolchain)
+            elif args.command == "policy":
+                report = json.loads(args.report.read_text(encoding="utf-8"))
+                policy_doc = json.loads(args.policy_file.read_text(encoding="utf-8"))
+                result = evaluate_policy(report, policy_doc, dry_run=args.dry_run)
+            elif args.command == "sbom":
+                result = generate_sbom()
+            elif args.command == "flaky":
+                result = detect_flaky_runs(args.reports)
+            elif args.command == "cluster-failures":
+                result = cluster_failures(args.logs)
+            elif args.command == "coverage":
+                result = ingest_cobertura_coverage(args.xml)
+            elif args.command == "evidence-scorecard":
+                result = evidence_scorecard(args.root, args.expect, max_age_seconds=args.max_age_seconds)
+            elif args.command == "provenance":
+                identity_doc = json.loads(args.identity.read_text(encoding="utf-8")) if args.identity else None
+                result = build_provenance(args.root, run_identity=identity_doc, report_path=args.report, bundle_path=args.bundle)
+            elif args.command == "approval-record":
+                decision = json.loads(args.policy_decision.read_text(encoding="utf-8"))
+                result = evaluate_approval(policy_decision=decision, actor=args.actor, role=args.role,
+                    run_operator=args.operator, policy_author=args.policy_author, rationale=args.rationale,
+                    approved=args.approve, require_separation=not args.allow_self_approval)
+            elif args.command == "validate-waiver":
+                waiver_doc = json.loads(args.waiver.read_text(encoding="utf-8"))
+                result = validate_waiver(waiver_doc, requested_scope=args.scope)
+            elif args.command == "change-impact":
+                changes = json.loads(args.changes.read_text(encoding="utf-8"))
+                rules = json.loads(args.rules.read_text(encoding="utf-8"))
+                if not isinstance(changes, list) or not isinstance(rules, dict):
+                    raise ValueError("changes must be a JSON array and rules must be a JSON object")
+                result = map_change_impact(changes, rules)
+            elif args.command == "estimate-resources":
+                result = estimate_resources(source_bytes=args.source_bytes, file_count=args.file_count,
+                    requested_timeout_seconds=args.timeout_seconds, profile=args.profile)
+            elif args.command == "cleanup-workspace":
+                result = cleanup_workspace(args.workspace, args.allowed_root, dry_run=not args.execute)
+            else:
+                result = record_retention_action(args.path, action=args.action, reason=args.reason,
+                    actor=args.actor, retention_until_utc=args.until)
+            out_path = getattr(args, "out", None) or Path("mqv-cleanup-result.json")
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps({k: v for k, v in result.items() if k not in {"files", "inventory", "components", "stages", "clusters", "items"}}, indent=2))
+        print(f"Evidence: {out_path}")
+        if args.command == "policy":
+            return 0 if result["eligible_for_human_review"] else 2
+        if args.command == "approval-record":
+            return 0 if result["status"] == "APPROVED" else 2
+        if args.command == "validate-waiver":
+            return 0 if result["valid"] else 2
+        return 0
     try:
         results = run_project(args.source, args.out, top=args.top, testbenches=args.testbench,
                               sim_top=args.sim_top, netlist=args.netlist, liberty=args.liberty,
