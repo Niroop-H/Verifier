@@ -44,6 +44,24 @@ python -m mqv_eda verify fixtures/projects/good --top comb --testbench tb_comb.v
 
 EDA executables must be installed and available on PATH for their corresponding flows. See [Linux build instructions](docs/BUILD_LINUX.md) and `python -m mqv_eda --help` for current options.
 
+## Evidence comparison and failure triage
+
+Compare two JSON reports and write a machine-readable regression summary:
+
+```bash
+python -m mqv_eda compare baseline/report.json candidate/report.json --out build/regression.json
+```
+
+A newly failing check or a removed baseline check returns exit code 1; malformed reports return 2. Review the output before drawing engineering conclusions.
+
+Analyze a tool log using deterministic, evidence-linked patterns:
+
+```bash
+python -m mqv_eda triage build/demo/logs/RTL_COMPILE.log --out build/triage.json
+```
+
+Triage suggestions are heuristics, not proven root causes. They include matching log lines and hashes so an engineer can inspect the original evidence. Neither command independently validates the underlying EDA result.
+
 ## Product differentiation and customer trust
 
 - [Customer choice and competitive advantage backlog](docs/CUSTOMER_CHOICE_AND_COMPETITIVE_ADVANTAGE.md): measurable differentiators, customer value metrics, defence-oriented requirements, and release gates.
