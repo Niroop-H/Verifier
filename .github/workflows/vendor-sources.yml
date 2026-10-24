@@ -1,0 +1,61 @@
+name: Vendor pinned EDA source snapshots
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type VENDOR to materialize the pinned third-party source trees into this branch"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vendor-source-snapshots-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  vendor:
+    if: ${{ inputs.confirm == 'VENDOR' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Materialize pinned source snapshots
+        run: python scripts/vendor_sources.py sync
+
+      - name: Verify every materialized source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r name; do
+            python scripts/vendor_sources.py verify --name "$name"
+          done < <(python -c 'import json; print("\n".join(x["name"] for x in json.load(open("vendor/manifest.json", encoding="utf-8"))["sources"]))')
+
+      - name: Commit vendored source files to the selected branch
+        shell: bash
+        env:
+          TARGET_REF: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add vendor/src
+          if git diff --cached --quiet; then
+            echo "No source snapshot changes to commit."
+            exit 0
+          fi
+          git commit -m "Vendor pinned upstream EDA source snapshots"
+          git push origin "HEAD:${TARGET_REF}"
