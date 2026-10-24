@@ -19,7 +19,7 @@ from .quality_gates import evaluate_mutation_results, validate_golden_corpus
 from .contracts import cli_contract
 from .history import minimize_failure_cover, regression_history
 from .config_validation import load_and_validate_config
-from .job_queue import enqueue as enqueue_job, get_job, list_jobs, claim_next, cancel_job, transition as transition_job, job_health
+from .job_queue import enqueue as enqueue_job, get_job, list_jobs, claim_next, cancel_job, transition as transition_job, job_health, finish_job
 from .waiver_register import create_waiver, get_waiver, list_waivers, revoke_waiver
 
 def build_parser() -> argparse.ArgumentParser:
@@ -239,8 +239,8 @@ def main(argv: list[str] | None = None) -> int:
             elif args.jobs_action == "cancel":
                 result = cancel_job(args.db, args.job_id, actor=args.actor)
             else:
-                result = transition_job(args.db, args.job_id, args.state, actor=args.worker_id,
-                                        detail=args.detail, error=args.error)
+                result = finish_job(args.db, args.job_id, worker_id=args.worker_id, state=args.state,
+                                    detail=args.detail, error=args.error)
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
             return 2
