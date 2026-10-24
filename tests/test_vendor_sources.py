@@ -45,7 +45,7 @@ def test_manifest_rejects_destination_traversal(tmp_path, monkeypatch):
             "name": "example",
             "repository": "https://example.com/example.git",
             "revision": "a" * 40,
-            "destination": "vendor/src/../../outside"
+            "destination": "vendor/src/../../../outside"
         }]
     }
     path = tmp_path / "manifest.json"
