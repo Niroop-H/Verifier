@@ -40,9 +40,9 @@ python3 -m pip install -r requirements-dev.txt
 python -m mqv_eda doctor
 python -m mqv_eda tool-catalog
 python -m mqv_eda pdks
-python -m mqv_eda verify fixtures/projects/good --top comb --testbench tb_comb.v --sim-top tb_comb --out build/demo
+# Public sample fixture: bundling is safe for this non-sensitive example
+python -m mqv_eda verify fixtures/projects/good --top comb --testbench tb_comb.v --sim-top tb_comb --out build/demo --bundle-inputs
 python -m mqv_eda verify-evidence build/demo/evidence-manifest.json
-# Or add --bundle-inputs to the verify command only when authorized to copy source collateral
 ```
 
 EDA executables must be installed and available on PATH for their corresponding flows. See [Linux build instructions](docs/BUILD_LINUX.md) and `python -m mqv_eda --help` for current options.
