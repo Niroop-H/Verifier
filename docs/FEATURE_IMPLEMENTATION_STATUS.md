@@ -30,7 +30,7 @@ This tracker separates code that exists from complete acceptance of the original
 | 13 | Policy versioning | Implemented baseline | Add managed immutable policy storage and migration lifecycle |
 | 14 | Human approval gate | Partial | Authenticated identities, durable approvals and protected storage |
 | 15 | Separation of duties | Partial | Enforce in a trusted service; current local helper is not an identity system |
-| 16 | Waiver and exception register | Partial | Durable register, authorization, review trail and revocation |
+| 16 | Waiver and exception register | Partial | SQLite-backed scoped records, expiry, revocation and event history now exist; authenticated authorization, review workflow, protected storage and multi-user service integration remain |
 | 17 | Policy dry-run mode | Implemented baseline | Expand policy-specific preview coverage |
 | 18 | Baseline freshness rules | Partial | Link freshness to source revisions and policy-driven rerun enforcement |
 | 19 | Change-impact rule mapping | Partial | Dependency-aware mappings and explicit integration with skipped checks |
@@ -90,3 +90,10 @@ The `mqv_eda.job_queue` module now provides a SQLite-backed, single-host queue w
 CLI entry point: `python -m mqv_eda jobs --db .mqv/jobs.sqlite3 <list|health|submit|show|claim|cancel|finish>`.
 
 This is **not yet a distributed queue or a complete background execution service**. A worker must poll a running job's `cancel_requested` field and acknowledge cancellation. The CLI's `finish` command records a worker-reported outcome; it does not itself execute or terminate an EDA process. SQLite is appropriate for a local/single-host prototype, not multi-host production scheduling.
+
+
+## Latest incremental implementation — durable waiver register
+
+The `mqv_eda.waiver_register` module now persists scoped policy exceptions in SQLite, requires a non-empty rationale and future expiry, records creation/revocation events, supports revocation, and evaluates scope using exact-match context keys. The `mqv-eda waivers` CLI exposes create/list/show/revoke operations.
+
+This is a local governance primitive, not a trusted authorization service: actor names are caller-supplied, wildcard matching is intentionally not implemented, and the register is not yet wired as an automatic policy bypass or release approval. Treat waivers as records for review; do not assume a record alone authorizes a release.
