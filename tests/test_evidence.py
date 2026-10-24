@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 from mqv_eda.evidence import build_evidence_manifest, verify_evidence_manifest
 from mqv_eda.models import CheckResult, Status
