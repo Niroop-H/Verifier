@@ -7,7 +7,7 @@ from mqv_eda.contracts import cli_contract
 def test_cli_parser_registers_new_commands():
     parser = build_parser()
     help_text = parser.format_help()
-    for command in ("inventory", "run-identity", "policy", "sbom", "flaky",
+    for command in ("inventory", "run-identity", "baseline-freshness", "policy", "sbom", "flaky",
                     "cluster-failures", "coverage", "evidence-scorecard", "provenance", "jobs", "history", "minimize-failures", "validate-config",
                     "approval-record", "validate-waiver", "change-impact", "estimate-resources",
                     "cleanup-workspace", "retention-record", "mutation-score", "golden-corpus", "waivers"):
@@ -34,3 +34,20 @@ def test_policy_cli_blocks_missing_required_check(tmp_path, capsys):
     assert code == 2
     result = json.loads(out.read_text())
     assert result["decision"] == "BLOCKED"
+
+
+
+def test_baseline_freshness_cli_blocks_stale_baseline(tmp_path, capsys):
+    baseline = tmp_path / "baseline.json"
+    current = tmp_path / "current.json"
+    baseline.write_text(json.dumps({"metadata": {"run_identity": {
+        "created_utc": "2020-01-01T00:00:00+00:00", "source_revision": "same"
+    }}}))
+    current.write_text(json.dumps({"metadata": {"run_identity": {"source_revision": "same"}}}))
+    output = tmp_path / "freshness.json"
+    code = main(["baseline-freshness", str(baseline), str(current),
+                 "--max-age-seconds", "60", "--out", str(output)])
+    result = json.loads(output.read_text())
+    capsys.readouterr()
+    assert code == 2
+    assert result["status"] == "STALE_OR_UNVERIFIABLE"
