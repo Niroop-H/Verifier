@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from .engine import run_project
 from .models import aggregate_status, Status
-from .reporting import write_reports
+from .reporting import write_reports, write_history_dashboard
 from .tools import discover_tools
 from .pdks import inspect_profile, list_profiles
 from .tool_catalog import list_tool_catalog
@@ -157,6 +157,9 @@ def build_parser() -> argparse.ArgumentParser:
     golden.add_argument("manifest", type=Path)
     golden.add_argument("--out", type=Path, default=Path("mqv-golden-corpus.json"))
     history = sub.add_parser("history", help="Summarize ordered regression reports without hiding failures")
+    history_dashboard = sub.add_parser("history-dashboard", help="Render an accessible HTML regression dashboard")
+    history_dashboard.add_argument("reports", type=Path, nargs="+")
+    history_dashboard.add_argument("--out", type=Path, default=Path("mqv-regression-dashboard.html"))
     history.add_argument("reports", nargs="+", type=Path)
     history.add_argument("--out", type=Path, default=Path("mqv-regression-history.json"))
     minimize = sub.add_parser("minimize-failures", help="Suggest a smaller test subset from failure-ID mappings")
@@ -382,6 +385,15 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(result, indent=2))
             return 0 if result["state"] == "COLLATERAL_PRESENT_NOT_VALIDATED" else 2
         print(json.dumps(list_profiles(), indent=2))
+        return 0
+    if args.command == "history-dashboard":
+        try:
+            history_data = regression_history(args.reports)
+            path = write_history_dashboard(history_data, args.out)
+        except (OSError, ValueError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps({"status": "GENERATED", "dashboard": str(path), "runs": len(history_data["runs"])}, indent=2))
         return 0
     if args.command == "tool-catalog":
         print(json.dumps(list_tool_catalog(), indent=2))
