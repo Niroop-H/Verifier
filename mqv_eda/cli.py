@@ -19,7 +19,7 @@ from .quality_gates import evaluate_mutation_results, validate_golden_corpus
 from .contracts import cli_contract
 from .history import minimize_failure_cover, regression_history
 from .config_validation import load_and_validate_config
-from .job_queue import enqueue as enqueue_job, get_job, list_jobs, claim_next, cancel_job, transition as transition_job, job_health
+from .job_queue import enqueue as enqueue_job, get_job, list_jobs, claim_next, cancel_job, transition as transition_job, job_health\nfrom .waiver_register import create_waiver, get_waiver, list_waivers, revoke_waiver
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mqv-eda", description="MAH Quantum Verify local EDA verification runner")
@@ -166,6 +166,22 @@ def build_parser() -> argparse.ArgumentParser:
     job_finish.add_argument("--state", choices=["SUCCEEDED", "FAILED", "CANCELLED"], required=True)
     job_finish.add_argument("--detail", default="")
     job_finish.add_argument("--error")
+    waivers = sub.add_parser("waivers", help="Manage durable local policy-waiver records")
+    waivers.add_argument("--db", type=Path, default=Path(".mqv/governance.sqlite3"))
+    waivers_sub = waivers.add_subparsers(dest="waivers_action", required=True)
+    waivers_sub.add_parser("list", help="List waiver records and their current status")
+    waiver_create = waivers_sub.add_parser("create", help="Create a scoped waiver with mandatory expiry")
+    waiver_create.add_argument("--rule-id", required=True)
+    waiver_create.add_argument("--scope", type=Path, required=True, help="JSON object with exact-match scope keys")
+    waiver_create.add_argument("--reason", required=True)
+    waiver_create.add_argument("--created-by", required=True)
+    waiver_create.add_argument("--expires-at", type=float, required=True, help="Expiry as Unix timestamp")
+    waiver_show = waivers_sub.add_parser("show", help="Show waiver record and audit events")
+    waiver_show.add_argument("waiver_id")
+    waiver_revoke = waivers_sub.add_parser("revoke", help="Revoke an active waiver")
+    waiver_revoke.add_argument("waiver_id")
+    waiver_revoke.add_argument("--actor", required=True)
+    waiver_revoke.add_argument("--reason", required=True)
     verify = sub.add_parser("verify", help="Run applicable EDA checks on a project folder or ZIP")
     verify.add_argument("source", type=Path)
     verify.add_argument("--top", help="Explicit RTL top-level module")
@@ -184,6 +200,25 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "waivers":
+        try:
+            if args.waivers_action == "create":
+                scope = json.loads(args.scope.read_text(encoding="utf-8"))
+                result = create_waiver(args.db, rule_id=args.rule_id, scope=scope,
+                                       reason=args.reason, created_by=args.created_by,
+                                       expires_at=args.expires_at)
+            elif args.waivers_action == "show":
+                result = get_waiver(args.db, args.waiver_id)
+            elif args.waivers_action == "revoke":
+                result = revoke_waiver(args.db, args.waiver_id,
+                                       actor=args.actor, reason=args.reason)
+            else:
+                result = {"waivers": list_waivers(args.db)}
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
     if args.command == "jobs":
         try:
             if args.jobs_action == "submit":
