@@ -35,3 +35,21 @@ def test_run_once_reports_idle_when_queue_empty(tmp_path, capsys):
     assert cli.main(["jobs", "--db", str(db), "run-once", "--worker-id", "worker-idle"]) == 0
     result = json.loads(capsys.readouterr().out)
     assert result["state"] == "IDLE"
+
+
+
+def test_run_once_returns_failure_for_nonpassing_verification(tmp_path, monkeypatch, capsys):
+    db = tmp_path / "jobs.sqlite3"
+    source = tmp_path / "rtl"
+    source.mkdir()
+    (source / "top.v").write_text("module top; endmodule\n")
+    enqueue(db, {"source": str(source), "output_dir": str(tmp_path / "failed-output")})
+    monkeypatch.setattr(cli, "run_project", lambda *a, **k: [
+        CheckResult("simulation", Status.FAIL, "Mismatch", required=True)
+    ])
+    monkeypatch.setattr(cli, "discover_tools", lambda: {
+        "platform": "test", "python": "3.test", "tools": {}
+    })
+    assert cli.main(["jobs", "--db", str(db), "run-once", "--worker-id", "worker-fail"]) == 1
+    result = json.loads(capsys.readouterr().out)
+    assert result["state"] == "FAILED"
