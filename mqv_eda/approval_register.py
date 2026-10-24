@@ -59,12 +59,13 @@ def create_approval(database: Path, *, run_id: str, report_sha256: str, actor: s
                     role: str, decision: str, rationale: str,
                     run_operator: str | None = None, policy_author: str | None = None,
                     require_separation: bool = True) -> dict[str, Any]:
-    required = {"run_id": run_id, "report_sha256": report_sha256,
-                "actor": actor, "role": role, "rationale": rationale}
-    if any(not isinstance(value, str) or not value.strip() for value in required.values()):
-        raise ValueError("run_id, report_sha256, actor, role, and rationale are required")
-    if len(report_sha256) != 64 or any(ch not in "0123456789abcdefABCDEF" for ch in report_sha256):
+    if not isinstance(report_sha256, str) or len(report_sha256) != 64 or any(
+        ch not in "0123456789abcdefABCDEF" for ch in report_sha256
+    ):
         raise ValueError("report_sha256 must be a 64-character hexadecimal SHA-256")
+    required = {"run_id": run_id, "actor": actor, "role": role, "rationale": rationale}
+    if any(not isinstance(value, str) or not value.strip() for value in required.values()):
+        raise ValueError("run_id, actor, role, and rationale are required")
     if decision not in {"APPROVE", "REJECT"}:
         raise ValueError("decision must be APPROVE or REJECT")
     blockers = []
