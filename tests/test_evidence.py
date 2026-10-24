@@ -52,7 +52,9 @@ def test_verify_manifest_detects_changed_log_and_input(tmp_path):
     document = build_evidence_manifest(tmp_path, [result], generated_utc="2026-01-01T00:00:00+00:00")
     # A portable bundle uses relative paths and observed hashes.
     document["checks"][0]["inputs"][0]["path"] = "design.v"
+    document["checks"][0]["inputs"][0]["bundled"] = True
     document["checks"][0]["log"]["path"] = "check.log"
+    document["checks"][0]["log"]["bundled"] = True
     manifest_path = tmp_path / "evidence-manifest.json"
     import json
     manifest_path.write_text(json.dumps(document), encoding="utf-8")
@@ -69,7 +71,7 @@ def test_verify_manifest_rejects_path_escape(tmp_path):
     import json
     manifest_path = tmp_path / "evidence-manifest.json"
     manifest_path.write_text(json.dumps({
-        "checks": [{"inputs": [{"path": "../outside.txt", "observed_sha256": "0" * 64}], "log": None}]
+        "checks": [{"inputs": [{"path": "../outside.txt", "observed_sha256": "0" * 64, "bundled": True}], "log": None}]
     }), encoding="utf-8")
     report = verify_evidence_manifest(manifest_path)
     assert report["integrity_status"] == "FAIL"
