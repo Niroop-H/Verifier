@@ -1,12 +1,18 @@
 name: Vendor pinned EDA source snapshots
 
 on:
-  push:
-    branches: ["feature/self-contained-toolchain"]
   workflow_dispatch:
     inputs:
+      pack:
+        description: "Source pack to materialize (PDKs are managed separately)"
+        required: true
+        type: choice
+        options:
+          - formal
+          - rtl-tooling
+          - physical-design
       confirm:
-        description: "Type VENDOR to materialize the pinned third-party source trees into this branch"
+        description: "Type VENDOR to materialize the selected source pack into this branch"
         required: true
         type: string
 
@@ -19,7 +25,7 @@ concurrency:
 
 jobs:
   vendor:
-    if: ${{ github.event_name == 'push' || inputs.confirm == 'VENDOR' }}
+    if: ${{ inputs.confirm == 'VENDOR' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
@@ -36,15 +42,13 @@ jobs:
           python-version: "3.11"
 
       - name: Materialize pinned source snapshots
-        run: python scripts/vendor_sources.py sync
+        run: python scripts/vendor_sources.py sync --pack "${{ inputs.pack }}"
 
       - name: Verify every materialized source tree
         shell: bash
         run: |
           set -euo pipefail
-          while IFS= read -r name; do
-            python scripts/vendor_sources.py verify --name "$name"
-          done < <(python -c 'import json; print("\n".join(x["name"] for x in json.load(open("vendor/manifest.json", encoding="utf-8"))["sources"]))')
+          python scripts/vendor_sources.py verify --pack "${{ inputs.pack }}"
 
       - name: Report source volume and reject files beyond GitHub's regular-file limit
         shell: bash
@@ -62,8 +66,10 @@ jobs:
               for path, size in oversized:
                   print(f"REQUIRES REVIEW: {path} ({size / (1024 ** 2):.1f} MiB)")
               raise SystemExit("Oversized source/artifact detected; split or explicitly review it before committing.")
-          if total > 3.5 * 1024 ** 3:
-              raise SystemExit("Vendor tree exceeds 3.5 GiB safety budget; split the toolchain into separately versioned source packs.")
+          budget = 1.5 * 1024 ** 3
+          print(f"Pack safety budget: {budget / (1024 ** 3):.1f} GiB")
+          if total > budget:
+              raise SystemExit("Selected pack exceeds 1.5 GiB safety budget; curate exclusions or keep the dependency in an external, separately versioned pack.")
           PY
 
       - name: Commit vendored source files to the selected branch
