@@ -7,7 +7,7 @@ from mqv_eda.contracts import cli_contract
 def test_cli_parser_registers_new_commands():
     parser = build_parser()
     help_text = parser.format_help()
-    for command in ("inventory", "run-identity", "baseline-freshness", "license-inventory", "policy", "sbom", "flaky",
+    for command in ("inventory", "run-identity", "baseline-freshness", "license-inventory", "sign-provenance", "verify-provenance-signature", "policy", "sbom", "flaky",
                     "cluster-failures", "coverage", "evidence-scorecard", "provenance", "jobs", "history", "minimize-failures", "validate-config",
                     "approval-record", "validate-waiver", "change-impact", "estimate-resources",
                     "cleanup-workspace", "retention-record", "mutation-score", "golden-corpus", "waivers"):
@@ -64,3 +64,28 @@ def test_license_inventory_cli_emits_report(tmp_path, capsys):
     capsys.readouterr()
     assert result["spdx_declared_count"] == 1
     assert result["files"][0]["spdx_identifiers"] == ["Apache-2.0"]
+
+
+
+def test_provenance_signing_commands_use_detached_signature_helpers(tmp_path, monkeypatch, capsys):
+    from mqv_eda import cli
+
+    provenance = tmp_path / "provenance.json"
+    provenance.write_text("{}")
+    key = tmp_path / "key.pem"
+    signature = tmp_path / "provenance.sig"
+    monkeypatch.setattr(cli, "sign_bundle", lambda artifact, private_key, sig: {
+        "bundle_sha256": "a" * 64, "signature": str(sig)
+    })
+    monkeypatch.setattr(cli, "verify_bundle_signature", lambda artifact, public_key, sig: {
+        "valid": True, "bundle_sha256": "a" * 64
+    })
+    assert main(["sign-provenance", str(provenance), "--private-key", str(key),
+                 "--signature", str(signature)]) == 0
+    signed = json.loads(capsys.readouterr().out)
+    assert signed["signed_artifact"] == "provenance"
+    assert main(["verify-provenance-signature", str(provenance), "--public-key", str(key),
+                 "--signature", str(signature)]) == 0
+    verified = json.loads(capsys.readouterr().out)
+    assert verified["valid"] is True
+    assert verified["verified_artifact"] == "provenance"
