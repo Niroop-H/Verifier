@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from mqv_eda.governance import evaluate_baseline_freshness, create_run_identity, evaluate_policy, generate_sbom, inventory_inputs
+from mqv_eda.governance import evaluate_baseline_freshness, create_run_identity, evaluate_policy, generate_sbom, inventory_inputs, inventory_license_notices
 
 
 def test_inventory_fingerprint_changes_when_input_changes(tmp_path):
@@ -122,3 +122,24 @@ def test_baseline_freshness_blocks_missing_identity_and_future_timestamps():
     result = evaluate_baseline_freshness(future, current, now=now)
     assert not result["fresh"]
     assert any("future" in reason.lower() for reason in result["blockers"])
+
+
+
+def test_license_notice_inventory_hashes_files_and_extracts_spdx(tmp_path):
+    (tmp_path / "LICENSE").write_text("SPDX-License-Identifier: MIT\n")
+    (tmp_path / "vendor").mkdir()
+    (tmp_path / "vendor" / "NOTICE.txt").write_text("Third-party attribution required.\n")
+    result = inventory_license_notices(tmp_path)
+    assert result["notice_file_count"] == 2
+    assert result["spdx_declared_count"] == 1
+    by_name = {item["path"]: item for item in result["files"]}
+    assert by_name["LICENSE"]["spdx_identifiers"] == ["MIT"]
+    assert len(by_name["vendor/NOTICE.txt"]["sha256"]) == 64
+    assert by_name["vendor/NOTICE.txt"]["license_status"] == "MANUAL_REVIEW_REQUIRED"
+
+
+def test_license_notice_inventory_rejects_symlinks(tmp_path):
+    (tmp_path / "LICENSE").write_text("MIT")
+    (tmp_path / "LICENSE-link").symlink_to(tmp_path / "LICENSE")
+    with pytest.raises(ValueError, match="Symlink rejected"):
+        inventory_license_notices(tmp_path)
