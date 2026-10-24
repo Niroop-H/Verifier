@@ -9,6 +9,7 @@ from .reporting import write_reports
 from .tools import discover_tools
 from .pdks import inspect_profile, list_profiles
 from .tool_catalog import list_tool_catalog
+from .report_analysis import compare_reports, triage_log, write_json
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mqv-eda", description="MAH Quantum Verify local EDA verification runner")
@@ -21,6 +22,13 @@ def build_parser() -> argparse.ArgumentParser:
     pdks.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
     catalog = sub.add_parser("tool-catalog", help="List tool integration and validation states")
     catalog.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    compare = sub.add_parser("compare", help="Compare two JSON evidence reports and identify regressions")
+    compare.add_argument("baseline", type=Path)
+    compare.add_argument("candidate", type=Path)
+    compare.add_argument("--out", type=Path, default=Path("mqv-compare.json"))
+    triage = sub.add_parser("triage", help="Produce evidence-linked deterministic suggestions from a tool log")
+    triage.add_argument("log", type=Path)
+    triage.add_argument("--out", type=Path, default=Path("mqv-triage.json"))
     verify = sub.add_parser("verify", help="Run applicable EDA checks on a project folder or ZIP")
     verify.add_argument("source", type=Path)
     verify.add_argument("--top", help="Explicit RTL top-level module")
@@ -55,6 +63,26 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "tool-catalog":
         print(json.dumps(list_tool_catalog(), indent=2))
+        return 0
+    if args.command == "compare":
+        try:
+            result = compare_reports(args.baseline, args.candidate)
+            write_json(result, args.out)
+        except (OSError, ValueError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2))
+        print(f"Comparison evidence: {args.out}")
+        return 1 if result["regression_count"] else 0
+    if args.command == "triage":
+        try:
+            result = triage_log(args.log)
+            write_json(result, args.out)
+        except (OSError, ValueError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2))
+        print(f"Triage evidence: {args.out}")
         return 0
     try:
         results = run_project(args.source, args.out, top=args.top, testbenches=args.testbench,
