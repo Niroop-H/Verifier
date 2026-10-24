@@ -561,7 +561,7 @@ def main(argv: list[str] | None = None) -> int:
                 })
                 provenance = build_provenance(project_root, run_identity=identity, report_path=paths["json"])
                 (run_dir / "provenance.json").write_text(
-                    json.dumps(provenance, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+                    json.dumps(provenance, indent=2, sort_keys=True) + "\n", encoding="utf-8")
                 signature = [
                     {"stage": r.stage, "status": r.status.value, "required": r.required,
                      "exit_code": r.exit_code}
@@ -594,7 +594,7 @@ def main(argv: list[str] | None = None) -> int:
             }
             out_root.mkdir(parents=True, exist_ok=True)
             summary_path = out_root / "reproducibility-summary.json"
-            summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+            summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
             print(json.dumps(summary, indent=2, sort_keys=True))
             print(f"Evidence: {summary_path}")
             return 0 if status == "REPRODUCIBLE_OUTCOME" else 1
