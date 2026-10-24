@@ -32,7 +32,7 @@ This tracker separates code that exists from complete acceptance of the original
 | 15 | Separation of duties | Partial | Enforce in a trusted service; current local helper is not an identity system |
 | 16 | Waiver and exception register | Partial | SQLite-backed scoped records, expiry, revocation and event history now exist; authenticated authorization, review workflow, protected storage and multi-user service integration remain |
 | 17 | Policy dry-run mode | Implemented baseline | Expand policy-specific preview coverage |
-| 18 | Baseline freshness rules | Partial | Link freshness to source revisions and policy-driven rerun enforcement |
+| 18 | Baseline freshness rules | Partial | Fail-closed CLI gate now checks baseline run timestamp, max age, and source revision equality; policy-driven rerun execution and baseline approval workflow remain |
 | 19 | Change-impact rule mapping | Partial | Dependency-aware mappings and explicit integration with skipped checks |
 | 20 | Decision explanation report | Implemented baseline | Add richer HTML rendering and integration |
 | 21 | Regression history and trend view | Partial | Persistent run store and trend visualizations |
@@ -138,3 +138,10 @@ Example payload:
 ```
 
 This is a single-host worker prototype, not a continuously supervised worker pool. Cancellation is not yet polled during an active EDA process, worker leases/recovery are absent, and worker IDs are labels rather than authenticated identities. Run only with trusted local job payloads.
+
+
+## Latest incremental implementation — baseline freshness gate
+
+Use `python -m mqv_eda baseline-freshness baseline-report.json current-report.json --max-age-seconds 604800` to evaluate a baseline. The command blocks missing or invalid timestamps, future-dated baselines, baselines older than the configured limit, and (by default) missing or changed source revisions. It emits a JSON decision and exits non-zero for stale or unverifiable baselines. `--allow-revision-change` is an explicit override and should only be used when the release policy permits cross-revision baselines.
+
+The gate evaluates freshness metadata; it does not prove semantic equivalence, execute a rerun, or approve a release.
