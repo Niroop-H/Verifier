@@ -154,10 +154,39 @@ def test_bundle_size_limit_rejects_before_copy(tmp_path):
     assert not (bundle_dir / "evidence-inputs").exists()
 
 
+
+def test_verify_manifest_rejects_malformed_schema(tmp_path):
+    import pytest
+    manifest_path = tmp_path / "evidence-manifest.json"
+    manifest_path.write_text(json.dumps({"schema_version": "999", "checks": []}), encoding="utf-8")
+    with pytest.raises(ValueError, match="Unsupported evidence manifest schema_version"):
+        verify_evidence_manifest(manifest_path)
+
+
+def test_verify_manifest_rejects_empty_checks(tmp_path):
+    import pytest
+    manifest_path = tmp_path / "evidence-manifest.json"
+    manifest_path.write_text(json.dumps({"schema_version": "1.0", "checks": []}), encoding="utf-8")
+    with pytest.raises(ValueError, match="at least one check"):
+        verify_evidence_manifest(manifest_path)
+
+
+def test_verify_manifest_fails_closed_for_malformed_entries(tmp_path):
+    manifest_path = tmp_path / "evidence-manifest.json"
+    manifest_path.write_text(json.dumps({
+        "schema_version": "1.0",
+        "checks": [{"inputs": "not-a-list", "log": 17}]
+    }), encoding="utf-8")
+    report = verify_evidence_manifest(manifest_path)
+    assert report["integrity_status"] == "FAIL"
+    assert report["problems"][0]["status"] == "INVALID_INPUT_LIST"
+
+
 def test_verify_manifest_rejects_path_escape(tmp_path):
     import json
     manifest_path = tmp_path / "evidence-manifest.json"
     manifest_path.write_text(json.dumps({
+        "schema_version": "1.0",
         "checks": [{"inputs": [{"path": "../outside.txt", "observed_sha256": "0" * 64, "bundled": True}], "log": None}]
     }), encoding="utf-8")
     report = verify_evidence_manifest(manifest_path)
