@@ -1,6 +1,6 @@
 import pytest
 
-from mqv_eda.job_queue import enqueue, claim_next, cancel_job, transition, get_job, list_jobs, job_health
+from mqv_eda.job_queue import enqueue, claim_next, cancel_job, transition, get_job, list_jobs, job_health, finish_job
 
 
 def test_queue_lifecycle_persists_events_and_terminal_state(tmp_path):
@@ -47,3 +47,16 @@ def test_invalid_transition_and_unknown_id_are_rejected(tmp_path):
         get_job(db, "missing")
     with pytest.raises(ValueError, match="between 1 and 1000"):
         list_jobs(db, limit=0)
+
+
+
+def test_only_claiming_worker_can_finish_job(tmp_path):
+    db = tmp_path / "jobs.sqlite3"
+    job = enqueue(db, {"source": "fixture"})
+    claim_next(db, worker_id="worker-a")
+    with pytest.raises(ValueError, match="does not own"):
+        finish_job(db, job["id"], worker_id="worker-b", state="SUCCEEDED")
+    finished = finish_job(db, job["id"], worker_id="worker-a",
+                          state="SUCCEEDED", detail="report persisted")
+    assert finished["state"] == "SUCCEEDED"
+    assert finished["events"][-1]["actor"] == "worker-a"
