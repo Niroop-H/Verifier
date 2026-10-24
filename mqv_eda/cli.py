@@ -21,6 +21,7 @@ from .history import minimize_failure_cover, regression_history
 from .config_validation import load_and_validate_config
 from .job_queue import enqueue as enqueue_job, get_job, list_jobs, claim_next, cancel_job, transition as transition_job, job_health, finish_job
 from .waiver_register import create_waiver, get_waiver, list_waivers, revoke_waiver
+from .approval_register import create_approval, get_approval, list_approvals
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mqv-eda", description="MAH Quantum Verify local EDA verification runner")
