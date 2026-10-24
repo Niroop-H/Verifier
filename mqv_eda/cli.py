@@ -16,10 +16,13 @@ from .governance import create_run_identity, evaluate_policy, generate_sbom, inv
 from .regression_intelligence import cluster_failures, detect_flaky_runs, ingest_cobertura_coverage
 from .operations import (build_provenance, cleanup_workspace, estimate_resources, evaluate_approval, evidence_scorecard, map_change_impact, record_retention_action, validate_waiver)
 from .quality_gates import evaluate_mutation_results, validate_golden_corpus
+from .contracts import cli_contract
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mqv-eda", description="MAH Quantum Verify local EDA verification runner")
     sub = parser.add_subparsers(dest="command", required=True)
+    contract = sub.add_parser("contract", help="Print the versioned CLI contract and exit-code semantics")
+    contract.add_argument("--out", type=Path, help="Optional path to save contract JSON")
     doctor = sub.add_parser("doctor", help="Discover installed EDA tools and versions")
     doctor.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
     pdks = sub.add_parser("pdks", help="List PDK profiles or inspect a local PDK root")
@@ -146,6 +149,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "contract":
+        result = cli_contract()
+        rendered = json.dumps(result, indent=2, sort_keys=True)
+        if args.out:
+            args.out.parent.mkdir(parents=True, exist_ok=True)
+            args.out.write_text(rendered + "\\n", encoding="utf-8")
+        print(rendered)
+        return 0
     if args.command == "doctor":
         info = discover_tools()
         print(json.dumps(info, indent=2))
