@@ -13,6 +13,7 @@ MAH Quantum Verify is an early-stage EDA verification orchestration platform. Th
 ## Session 2 — Security assurance foundation
 
 - [Session 2 completion status](docs/SESSION2_COMPLETION_STATUS.md): delivered controls, latest CI evidence, and the explicit production-readiness blockers.
+- [Evidence manifest and integrity checks](docs/EVIDENCE_MANIFEST.md): per-check input/log digests and a CLI to detect tampered or missing bundled evidence.
 
 - [Security assurance foundation](docs/SESSION2_SECURITY_ASSURANCE.md): path validation, deny-by-default role/action checks, best-effort secret redaction and hash-chained audit events.
 - [Threat model and worker security contract](docs/SESSION2_THREAT_MODEL.md): assets, trust boundaries, attack scenarios, deployment controls and worker-isolation exit criteria.
@@ -39,7 +40,9 @@ python3 -m pip install -r requirements-dev.txt
 python -m mqv_eda doctor
 python -m mqv_eda tool-catalog
 python -m mqv_eda pdks
-python -m mqv_eda verify fixtures/projects/good --top comb --testbench tb_comb.v --sim-top tb_comb --out build/demo
+# Public sample fixture: bundling is safe for this non-sensitive example
+python -m mqv_eda verify fixtures/projects/good --top comb --testbench tb_comb.v --sim-top tb_comb --out build/demo --bundle-inputs
+python -m mqv_eda verify-evidence build/demo/evidence-manifest.json
 ```
 
 EDA executables must be installed and available on PATH for their corresponding flows. See [Linux build instructions](docs/BUILD_LINUX.md) and `python -m mqv_eda --help` for current options.
@@ -54,7 +57,7 @@ EDA executables must be installed and available on PATH for their corresponding 
 - KLayout DRC execution with report parsing and positive/negative smoke fixtures.
 - PDK collateral inspection and integration-state catalogue.
 - Explicit result states: PASS, FAIL, BLOCKED, INCONCLUSIVE, NOT RUN and ERROR.
-- Input inventory/hashes, tool versions, logs and structured JSON/HTML evidence where produced by a flow.
+- Input inventory/hashes, tool versions, logs, structured JSON/HTML evidence, and an evidence manifest with an integrity-verification CLI.
 
 ## Interpreting results
 
