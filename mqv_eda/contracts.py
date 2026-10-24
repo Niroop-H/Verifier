@@ -11,6 +11,7 @@ COMMANDS = {
     "doctor": {"success": 0, "unavailable_toolchain": 2},
     "verify": {"pass": 0, "fail": 1, "blocked_or_error": 2},
     "repro-check": {"stable_outcome": 0, "outcome_variation_or_input_change": 1, "invalid_input_or_error": 2},
+    "history-dashboard": {"dashboard_written": 0, "invalid_report_or_error": 2},
     "compare": {"no_regression": 0, "regression": 1, "invalid_input": 2},
     "policy": {"eligible_for_human_review": 0, "blocked": 2},
     "baseline-freshness": {"fresh": 0, "stale_or_unverifiable": 2},
