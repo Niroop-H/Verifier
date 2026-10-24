@@ -4,7 +4,7 @@ import pytest
 
 from mqv_eda.operations import (
     build_provenance, cleanup_workspace, estimate_resources, evaluate_approval,
-    evidence_scorecard, map_change_impact, record_retention_action, validate_waiver,
+    evidence_scorecard, map_change_impact, record_retention_action, apply_retention_action, validate_waiver,
 )
 
 
@@ -91,3 +91,52 @@ def test_retention_records_intent_not_deletion(tmp_path):
     record = record_retention_action(target, action="delete", reason="expired", actor="operator")
     assert record["sha256_before_action"]
     assert target.exists()
+
+
+
+def test_retention_archive_dry_run_and_verified_copy(tmp_path):
+    source = tmp_path / "evidence.json"
+    source.write_text('{"result":"PASS"}')
+    destination = tmp_path / "archive" / "evidence.json"
+    destination.parent.mkdir()
+    preview = apply_retention_action(source, action="archive", reason="Keep for audit",
+                                     actor="operator", archive_to=destination)
+    assert preview["status"] == "WOULD_ARCHIVE"
+    assert source.exists() and not destination.exists()
+    done = apply_retention_action(source, action="archive", reason="Keep for audit",
+                                  actor="operator", archive_to=destination, dry_run=False)
+    assert done["status"] == "ARCHIVED"
+    assert source.read_bytes() == destination.read_bytes()
+    with pytest.raises(ValueError, match="must not already exist"):
+        apply_retention_action(source, action="archive", reason="Keep for audit",
+                               actor="operator", archive_to=destination, dry_run=False)
+
+
+def test_retention_delete_requires_matching_digest_and_explicit_execution(tmp_path):
+    import hashlib
+
+    source = tmp_path / "old.log"
+    source.write_text("old evidence")
+    digest = hashlib.sha256(source.read_bytes()).hexdigest()
+    with pytest.raises(ValueError, match="confirm-sha256"):
+        apply_retention_action(source, action="delete", reason="Retention expired",
+                               actor="operator", dry_run=False)
+    preview = apply_retention_action(source, action="delete", reason="Retention expired",
+                                     actor="operator", expected_sha256=digest)
+    assert preview["status"] == "WOULD_DELETE" and source.exists()
+    done = apply_retention_action(source, action="delete", reason="Retention expired",
+                                  actor="operator", expected_sha256=digest, dry_run=False)
+    assert done["status"] == "DELETED" and not source.exists()
+
+
+def test_retention_rejects_symlinks_and_directories(tmp_path):
+    target = tmp_path / "target.txt"
+    target.write_text("evidence")
+    link = tmp_path / "link.txt"
+    link.symlink_to(target)
+    with pytest.raises(ValueError, match="symlink"):
+        apply_retention_action(link, action="delete", reason="cleanup",
+                               actor="operator", dry_run=False)
+    with pytest.raises(ValueError, match="regular files"):
+        apply_retention_action(tmp_path, action="retain", reason="keep",
+                               actor="operator")
