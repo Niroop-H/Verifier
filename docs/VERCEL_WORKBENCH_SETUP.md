@@ -23,7 +23,7 @@ The tools.html workbench submits a real Icarus Verilog compile and VVP simulatio
 ## Limits and security
 
 - This is an initial real RTL simulation workflow, not the full local mqv_eda orchestration engine.
-- RTL source limit: 40 KB; testbench limit: 20 KB; runner timeout: 5 minutes.
+- RTL source limit: 25 KB; testbench limit: 10 KB; runner timeout: 5 minutes.
 - Do not upload confidential, export-controlled or customer-restricted designs. Submitted source is sent to GitHub Actions and temporarily processed there.
 - A simulator process exiting successfully is not proof of functional correctness. Use self-checking assertions in the testbench; inspect compile and simulation logs.
 - No formal proof, synthesis sign-off, STA, DRC/LVS, foundry qualification or fabrication-readiness claim is made by this workbench.
