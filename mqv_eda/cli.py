@@ -4,6 +4,7 @@ import json
 import sys
 from pathlib import Path
 from .engine import run_project
+from .evidence import build_evidence_manifest, verify_evidence_manifest
 from .models import aggregate_status, Status
 from .reporting import write_reports, write_history_dashboard
 from .tools import discover_tools
@@ -239,6 +240,10 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument("--lvs-netlist", type=Path, help="Reference source netlist for LVS")
     verify.add_argument("--out", type=Path, default=Path("mqv-report"))
     verify.add_argument("--timeout", type=float, default=120)
+    verify.add_argument("--bundle-inputs", action="store_true", help="Opt in to copying external inputs into evidence bundle")
+    verify.add_argument("--max-bundle-mb", type=float, default=100, help="Maximum external input bundle size in MiB")
+    verify_evidence = sub.add_parser("verify-evidence", help="Verify a saved evidence manifest and referenced files")
+    verify_evidence.add_argument("manifest", type=Path)
     repro = sub.add_parser("repro-check", help="Execute repeated runs and compare verification outcomes")
     repro.add_argument("source", type=Path)
     repro.add_argument("--runs", type=int, default=3)
@@ -562,6 +567,14 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "validate-config":
             return 0 if result["valid"] else 2
         return 0
+    if args.command == "verify-evidence":
+        try:
+            result = verify_evidence_manifest(args.manifest)
+            print(json.dumps(result, indent=2, sort_keys=True))
+            return 0 if result.get("integrity_status") == "PASS" else 1
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
     if args.command == "repro-check":
         try:
             if args.runs < 2 or args.runs > 10:
@@ -678,6 +691,14 @@ def main(argv: list[str] | None = None) -> int:
             "toolchain_snapshot": toolchain_snapshot,
             "run_identity": run_identity,
         })
+        manifest = build_evidence_manifest(
+            args.out, results,
+            {"source_name": args.source.name, "top": args.top, "run_identity": run_identity},
+            bundle_inputs=args.bundle_inputs,
+            max_bundle_bytes=max(0, int(args.max_bundle_mb * 1024 * 1024)),
+        )
+        manifest_path = args.out / "evidence-manifest.json"
+        manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         provenance = build_provenance(project_root, run_identity=run_identity,
                                       report_path=paths["json"])
         (args.out / "provenance.json").write_text(
@@ -692,6 +713,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"JSON evidence: {paths['json']}")
     print(f"HTML report:   {paths['html']}")
     print(f"Provenance:    {args.out / 'provenance.json'}")
+    print(f"Evidence manifest: {args.out / 'evidence-manifest.json'}")
     if overall == Status.PASS:
         return 0
     if overall == Status.FAIL:
