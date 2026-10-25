@@ -51,7 +51,7 @@ jobs:
           import base64, os, re, pathlib
           for key, name in [('RTL_B64','design.v'), ('TB_B64','testbench.v')]:
               raw = base64.b64decode(os.environ[key], validate=True)
-              if len(raw) > (40000 if name == 'design.v' else 20000):
+              if len(raw) > (25000 if name == 'design.v' else 10000):
                   raise SystemExit(f'{name} exceeds size limit')
               pathlib.Path('web-results', name).write_bytes(raw)
           for key in ('TOP','TB_TOP'):
