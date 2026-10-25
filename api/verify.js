@@ -15,7 +15,7 @@ module.exports = async (req, res) => {
     const rtl=String(body.rtl||""); const testbench=String(body.testbench||"");
     const top=String(body.top_module||""); const tbtop=String(body.testbench_top||"");
     if (!rtl.trim() || !testbench.trim()) return json(res,400,{error:"Provide both RTL source and a testbench."});
-    if (Buffer.byteLength(rtl,"utf8")>40000 || Buffer.byteLength(testbench,"utf8")>20000) return json(res,413,{error:"RTL limit is 40 KB and testbench limit is 20 KB."});
+    if (Buffer.byteLength(rtl,"utf8")>25000 || Buffer.byteLength(testbench,"utf8")>10000) return json(res,413,{error:"RTL limit is 40 KB and testbench limit is 20 KB."});
     if (!validModule(top)||!validModule(tbtop)) return json(res,400,{error:"Top module names must be valid Verilog identifiers."});
     const jobId=Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,9);
     const payload={ref:"main",inputs:{job_id:jobId,rtl_base64:Buffer.from(rtl,"utf8").toString("base64"),testbench_base64:Buffer.from(testbench,"utf8").toString("base64"),top_module:top,testbench_top:tbtop}};
