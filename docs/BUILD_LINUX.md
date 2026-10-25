@@ -48,6 +48,17 @@ python -m mqv_eda verify-evidence build/demo/evidence-manifest.json
 
 External design inputs are not copied by default. `--bundle-inputs` opts into copying known external inputs into the evidence directory, with a default 100 MiB cap. Adjust with `--max-bundle-mb N`. Only bundle RTL, libraries, netlists, PDK collateral, or rule decks when you are authorized to retain and distribute them. A passing integrity check confirms referenced bytes match recorded hashes; it does not prove design correctness, a signature, foundry sign-off, or fabrication readiness. See [Evidence Manifest](EVIDENCE_MANIFEST.md).
 
+## Evidence manifest and integrity verification
+
+Each verification run writes `evidence-manifest.json` alongside the JSON and HTML reports. To verify referenced files:
+
+```bash
+python -m mqv_eda verify fixtures/projects/good --top comb --testbench tb_comb.v --sim-top tb_comb --out build/demo --bundle-inputs
+python -m mqv_eda verify-evidence build/demo/evidence-manifest.json
+```
+
+External design inputs are not copied by default. `--bundle-inputs` opts into copying known external inputs into the evidence directory, with a default 100 MiB cap. Adjust with `--max-bundle-mb N`. Only bundle RTL, libraries, netlists, PDK collateral, or rule decks when you are authorized to retain and distribute them. A passing integrity check confirms referenced bytes match recorded hashes; it does not prove design correctness, a signature, foundry sign-off, or fabrication readiness. See [Evidence Manifest](EVIDENCE_MANIFEST.md).
+
 ## Results and status
 
 - PASS: the named check ran and met the stated criterion.
