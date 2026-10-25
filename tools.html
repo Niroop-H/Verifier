@@ -37,7 +37,7 @@ $('run').onclick=async()=>{
   let result=null;
   for(let i=0;i<60;i++){await new Promise(r=>setTimeout(r,3000));const pr=await fetch('/api/verify?job_id='+encodeURIComponent(jobId),{cache:'no-store'});result=await pr.json();if(!pr.ok)throw new Error(result.error||'Status request failed');$('status').innerHTML='<div class="status-title">'+result.status+'</div>'+String(result.message||'')+'\nJob ID: '+jobId;if(result.status==='COMPLETED'||result.status==='ERROR'){break;}}
   if(result?.run_url)$('links').insertAdjacentHTML('beforeend','<a target="_blank" rel="noopener" href="'+result.run_url+'">Open run and artifacts ↗</a>');
-  if(result?.artifact_url)$('links').insertAdjacentHTML('beforeend','<a target="_blank" rel="noopener" href="'+result.artifact_url+'">Download evidence ZIP ↗</a>');
+  
   if(!result||!['COMPLETED','ERROR'].includes(result.status))$('status').textContent+='\nStill running. Use the Open run link when available or submit this job ID to check again.';
  }catch(e){$('status').innerHTML='<div class="status-title">Could not run verification</div>'+String(e.message||e).replace(/</g,'&lt;');}
  finally{active=false;$('run').disabled=false;}
