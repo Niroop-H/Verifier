@@ -1,0 +1,87 @@
+name: MAH Quantum Verify Windows Package
+
+on:
+  push:
+    branches:
+      - release/windows-package
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-portable-cli:
+    name: Build and smoke-test Windows x64 package
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install pinned packager
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller==6.11.1
+
+      - name: Build standalone Windows executable
+        shell: pwsh
+        run: |
+          @'
+          from mqv_eda.cli import main
+          raise SystemExit(main())
+          '@ | Set-Content -Encoding utf8 .\\mqv_eda_entry.py
+          pyinstaller --noconfirm --clean --onefile --console --name MQV-EDA --collect-submodules mqv_eda .\\mqv_eda_entry.py
+
+      - name: Smoke-test executable
+        shell: pwsh
+        run: |
+          .\dist\MQV-EDA.exe --help
+          .\dist\MQV-EDA.exe doctor --json | Out-File -Encoding utf8 .\dist\doctor.json
+          .\dist\MQV-EDA.exe tool-catalog --json | Out-File -Encoding utf8 .\dist\tool-catalog.json
+          if ($LASTEXITCODE -ne 0) { throw "MQV-EDA executable smoke test failed: $LASTEXITCODE" }
+
+      - name: Assemble portable package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path .\dist\release | Out-Null
+          Copy-Item .\dist\MQV-EDA.exe .\dist\release\MQV-EDA.exe
+          Copy-Item README.md .\dist\release\README.md
+          Copy-Item .\dist\doctor.json .\dist\release\doctor-example.json
+          Copy-Item .\dist\tool-catalog.json .\dist\release\tool-catalog-example.json
+          Copy-Item -Recurse fixtures\projects\good .\dist\release\sample-project
+          @'
+          MAH Quantum Verify — Windows x64 evaluation package
+          
+          Quick start:
+            1. Extract this ZIP to a writable folder.
+            2. Open PowerShell in that folder.
+            3. Run: .\MQV-EDA.exe --help
+            4. Run: .\MQV-EDA.exe doctor --json
+            5. Install supported EDA tools separately and add their executables to PATH.
+            6. For a sample verification, run:
+               .\MQV-EDA.exe verify .\sample-project --top comb --testbench tb_comb.v --sim-top tb_comb --out .\output
+          
+          Important:
+          - This is an unsigned command-line evaluation build; it is not an MSIX or Microsoft Store package.
+          - EDA tools, libraries, PDKs and rule decks are not bundled. Their own licenses apply.
+          - Use non-sensitive sample designs only.
+          - A PASS applies only to checks actually executed with the configured inputs.
+          - This package is not foundry sign-off, tape-out authorization, or fabrication-readiness certification.
+          '@ | Set-Content -Encoding utf8 .\dist\release\README-WINDOWS.txt
+          Compress-Archive -Path .\dist\release\* -DestinationPath .\dist\MQV-EDA-Windows-x64.zip -Force
+
+      - name: Upload Windows distribution artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mah-quantum-verify-windows-x64
+          path: |
+            dist/MQV-EDA-Windows-x64.zip
+            dist/MQV-EDA.exe
+          if-no-files-found: error
+          retention-days: 14
