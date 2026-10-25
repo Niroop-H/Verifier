@@ -19,6 +19,17 @@ AEGIS EDA Verifier is an early-stage EDA verification orchestration platform. Th
 
 The catalogue explicitly distinguishes implemented flows from planned integrations and external silicon evidence. A catalogue entry does not mean that MQV can already run that check.
 
+## Product roadmap and engineering features
+
+- [50-feature engineering backlog](docs/FEATURE_CATALOG_50.md)
+- [Feature implementation status](docs/FEATURE_IMPLEMENTATION_STATUS.md)
+- [Self-contained toolchain strategy](docs/SELF_CONTAINED_TOOLCHAIN.md)
+- [Evidence manifest and integrity verification](docs/EVIDENCE_MANIFEST.md)
+- [Contribution standards](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+
+These documents distinguish implemented baselines, partial features, planned integrations, and acceptance criteria. A roadmap item is not evidence that a feature is production-ready.
+
 ## Session 2 — Security assurance foundation
 
 - [Session 2 completion status](docs/SESSION2_COMPLETION_STATUS.md): delivered controls, latest CI evidence, and the explicit production-readiness blockers.
