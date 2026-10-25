@@ -172,3 +172,70 @@ jobs:
           path: artifacts/ihp-drc-activ/
           if-no-files-found: warn
           retention-days: 30
+
+  picorv32-reference-evaluation:
+    name: MQV evaluation on PicoRV32 reference RTL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout MAH Quantum Verify
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned PicoRV32 source
+        uses: actions/checkout@v4
+        with:
+          repository: YosysHQ/picorv32
+          ref: ef203c2b0a3fb793280f5114941416c425c5b461
+          path: external/picorv32
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pinned OSS CAD Suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            https://github.com/YosysHQ/oss-cad-suite-build/releases/download/2026-10-22/oss-cad-suite-linux-x64-20261022.tgz \
+            --output "$RUNNER_TEMP/oss-cad-suite.tgz"
+          echo "45b7401d677f1e6cffb19dcaafb8e92c95a49dfc05b332ae4d00b84c94f62f6e  $RUNNER_TEMP/oss-cad-suite.tgz" | sha256sum --check -
+          tar -xzf "$RUNNER_TEMP/oss-cad-suite.tgz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/oss-cad-suite/bin" >> "$GITHUB_PATH"
+
+      - name: Prepare source and capture provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evaluation-input/picorv32 artifacts
+          cp external/picorv32/picorv32.v evaluation-input/picorv32/
+          {
+            echo "Reference: YosysHQ/PicoRV32"
+            echo "Pinned commit: ef203c2b0a3fb793280f5114941416c425c5b461"
+            sha256sum evaluation-input/picorv32/picorv32.v
+          } | tee artifacts/picorv32-provenance.txt
+          python -m pip install -r requirements-dev.txt
+          python -m mqv_eda doctor --json | tee artifacts/picorv32-doctor.json
+
+      - name: Run MQV on PicoRV32 core RTL
+        shell: bash
+        run: |
+          set +e
+          python -m mqv_eda verify evaluation-input/picorv32 \
+            --top picorv32 --out artifacts/picorv32-mqv --timeout 180 \
+            2>&1 | tee artifacts/picorv32-console.log
+          rc=${PIPESTATUS[0]}
+          echo "MQV exit code: $rc"
+          echo "$rc" > artifacts/picorv32-mqv-exit-code.txt
+          # Keep evidence even when MQV reports a design/check failure.
+          exit 0
+
+      - name: Upload PicoRV32 evaluation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mqv-picorv32-evaluation
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 30

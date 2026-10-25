@@ -10,10 +10,18 @@ AEGIS EDA Verifier is an early-stage EDA verification orchestration platform. Th
 
 > **Scope boundary:** This is not a claim of universal chip verification, foundry sign-off, defence certification, or fabrication readiness.
 
+## End-to-end chip verification roadmap
+
+- [Semiconductor verification coverage matrix](docs/CHIP_VERIFICATION_COVERAGE_MATRIX.md): lifecycle coverage targets, required inputs/evidence, maturity boundaries, and readiness-gate requirements.
+- [Industrialization roadmap](docs/INDUSTRIALIZATION_ROADMAP.md): technical maturity gates, scaling/security/product requirements and commercial evidence needed before a valuation claim.
+- Evidence-gated readiness policy: `mqv_eda/readiness.py`; it treats missing/failed/blocked evidence conservatively and never emits a fabrication-ready verdict.
+- Machine-readable verification unit catalogue: `mqv_eda/verification_catalog.py` (RTL, simulation, formal, CDC/RDC, DFT, synthesis, power, STA, physical design, sign-off, reliability, security and post-silicon).
+
+The catalogue explicitly distinguishes implemented flows from planned integrations and external silicon evidence. A catalogue entry does not mean that MQV can already run that check.
+
 ## Session 2 — Security assurance foundation
 
 - [Session 2 completion status](docs/SESSION2_COMPLETION_STATUS.md): delivered controls, latest CI evidence, and the explicit production-readiness blockers.
-
 - [Security assurance foundation](docs/SESSION2_SECURITY_ASSURANCE.md): path validation, deny-by-default role/action checks, best-effort secret redaction and hash-chained audit events.
 - [Threat model and worker security contract](docs/SESSION2_THREAT_MODEL.md): assets, trust boundaries, attack scenarios, deployment controls and worker-isolation exit criteria.
 - [Isolated worker deployment prototype](docs/WORKER_ISOLATION_DEPLOYMENT.md): constrained Docker runner, runtime assumptions and deployment acceptance tests.

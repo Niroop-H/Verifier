@@ -1,0 +1,122 @@
+name: MQV PicoRV32 Reference Evaluation
+
+on:
+  push:
+    branches: ["evaluation/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  picorv32-mqv-evaluation:
+    name: Run MQV against PicoRV32 RTL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout MAH Quantum Verify
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned PicoRV32 reference source
+        uses: actions/checkout@v4
+        with:
+          repository: YosysHQ/picorv32
+          ref: ef203c2b0a3fb793280f5114941416c425c5b461
+          path: external/picorv32
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pinned OSS CAD Suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            https://github.com/YosysHQ/oss-cad-suite-build/releases/download/2026-10-22/oss-cad-suite-linux-x64-20261022.tgz \
+            --output "$RUNNER_TEMP/oss-cad-suite.tgz"
+          echo "45b7401d677f1e6cffb19dcaafb8e92c95a49dfc05b332ae4d00b84c94f62f6e  $RUNNER_TEMP/oss-cad-suite.tgz" | sha256sum --check -
+          tar -xzf "$RUNNER_TEMP/oss-cad-suite.tgz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/oss-cad-suite/bin" >> "$GITHUB_PATH"
+
+      - name: Prepare minimal reference project and record provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evaluation-input/picorv32
+          cp external/picorv32/picorv32.v evaluation-input/picorv32/
+          {
+            echo "Reference: YosysHQ/PicoRV32"
+            echo "Pinned commit: ef203c2b0a3fb793280f5114941416c425c5b461"
+            echo "Source file: picorv32.v"
+            sha256sum evaluation-input/picorv32/picorv32.v
+          } | tee evaluation-provenance.txt
+          python -m pip install -r requirements-dev.txt
+          python -m mqv_eda doctor --json | tee doctor.json
+
+      - name: Run MQV verification on PicoRV32 core
+        id: mqv
+        shell: bash
+        run: |
+          set +e
+          python -m mqv_eda verify evaluation-input/picorv32 \
+            --top picorv32 --out artifacts/picorv32-mqv --timeout 180 \
+            2>&1 | tee artifacts-mqv-console.log
+          rc=${PIPESTATUS[0]}
+          echo "mqv_exit_code=$rc" >> "$GITHUB_OUTPUT"
+          echo "MQV exit code: $rc"
+          exit 0
+
+      - name: Create evaluation summary
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          report = pathlib.Path("artifacts/picorv32-mqv/report.json")
+          summary = pathlib.Path("evaluation-summary.md")
+          lines = [
+              "# MQV PicoRV32 Reference Evaluation",
+              "",
+              "- Reference: YosysHQ/PicoRV32",
+              "- Scope: core RTL only (picorv32.v)",
+              "- This is not a full-chip or fabrication-readiness assessment.",
+              "",
+          ]
+          if report.exists():
+              data = json.loads(report.read_text())
+              lines.append(f"- Overall MQV status: **{data.get('overall_status', 'UNKNOWN')}**")
+              lines.append("")
+              lines += ["| Check | Status | Message |", "|---|---|---|"]
+              for check in data.get("checks", []):
+                  message = str(check.get("message", "")).replace("|", "\\|").replace("\n", " ")
+                  lines.append(f"| {check.get('stage', '')} | {check.get('status', '')} | {message} |")
+          else:
+              lines += ["No MQV JSON report was produced. Inspect the console log and CI job failure."]
+          lines += [
+              "",
+              "## Scope limitations",
+              "",
+              "- Only checks supported and configurable by MQV are run.",
+              "- No testbench is included in this first core-only run; simulation may be NOT_RUN.",
+              "- Formal proof, static timing, DRC, LVS and fabrication readiness are not established.",
+              "- A PASS is limited to the named check and its exact inputs.",
+          ]
+          summary.write_text("\n".join(lines) + "\n")
+          print(summary.read_text())
+          PY
+
+      - name: Upload MQV report, logs and provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mqv-picorv32-evaluation
+          path: |
+            artifacts/picorv32-mqv/
+            artifacts-mqv-console.log
+            evaluation-summary.md
+            evaluation-provenance.txt
+            doctor.json
+          if-no-files-found: warn
+          retention-days: 30
