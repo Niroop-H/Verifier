@@ -1,0 +1,117 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "MAH Quantum Verify Evidence API Contract",
+    "version": "v1",
+    "description": "Reference contract for a future authenticated control-plane API. This file does not imply that an HTTP server is implemented. Sensitive RTL should remain on customer-managed workers unless a deployment explicitly authorizes transfer."
+  },
+  "servers": [
+    { "url": "https://localhost", "description": "Placeholder; configure an approved deployment endpoint" }
+  ],
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "Read service health without project data",
+        "responses": {
+          "200": {
+            "description": "Service health",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["status", "api_version"],
+                  "properties": {
+                    "status": { "type": "string", "enum": ["ok", "degraded"] },
+                    "api_version": { "type": "string", "const": "v1" }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/jobs/{job_id}": {
+      "get": {
+        "operationId": "getJobStatus",
+        "summary": "Read a job's public status metadata",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1, "maxLength": 128 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job metadata; never include RTL contents or secret values",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobStatus"
+                }
+              }
+            }
+          },
+          "401": { "description": "Authentication required" },
+          "403": { "description": "Authenticated principal is not authorized" },
+          "404": { "description": "Job not found or not visible to this principal" }
+        },
+        "security": [{ "bearerAuth": [] }]
+      }
+    },
+    "/v1/jobs/{job_id}/cancel": {
+      "post": {
+        "operationId": "cancelJob",
+        "summary": "Request cancellation; cancellation is not a passing result",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1, "maxLength": 128 }
+          }
+        ],
+        "responses": {
+          "202": { "description": "Cancellation requested; poll job state until terminal" },
+          "401": { "description": "Authentication required" },
+          "403": { "description": "Principal is not authorized to cancel this job" },
+          "404": { "description": "Job not found or not visible to this principal" },
+          "409": { "description": "Job is already in a terminal state" }
+        },
+        "security": [{ "bearerAuth": [] }]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Placeholder contract only; deployment must implement issuer, audience, expiry, revocation, and key rotation validation."
+      }
+    },
+    "schemas": {
+      "JobStatus": {
+        "type": "object",
+        "required": ["job_id", "state", "api_version"],
+        "properties": {
+          "job_id": { "type": "string" },
+          "state": {
+            "type": "string",
+            "enum": ["queued", "running", "cancelling", "cancelled", "timed_out", "completed", "failed", "blocked", "inconclusive"]
+          },
+          "api_version": { "type": "string", "const": "v1" },
+          "created_at": { "type": ["string", "null"], "format": "date-time" },
+          "updated_at": { "type": ["string", "null"], "format": "date-time" },
+          "result_summary": { "type": ["object", "null"], "additionalProperties": true }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}
