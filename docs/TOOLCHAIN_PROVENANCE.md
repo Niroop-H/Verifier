@@ -4,4 +4,6 @@ The CI job uses Ubuntu packages for the open-source tools and records their runt
 
 The STA regression downloads the Nangate45 typical Liberty library from OpenROAD-flow-scripts commit eda8e552974d47a12616294dddf4012d892548d3 at test time. The library is used only for a synthetic timing regression and is not redistributed by this repository. Review its upstream terms before reuse.
 
+The self-contained toolchain plan is documented in [SELF_CONTAINED_TOOLCHAIN.md](SELF_CONTAINED_TOOLCHAIN.md), with initial pinned source inputs in [vendor/manifest.json](../vendor/manifest.json). The source-vendor utility is `scripts/vendor_sources.py`.
+
 Do not treat package names as version pins. The artifacts produced by each run are the record of actual package and executable versions.
