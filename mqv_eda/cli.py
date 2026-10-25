@@ -5,14 +5,29 @@ import sys
 from pathlib import Path
 from .engine import run_project
 from .models import aggregate_status, Status
-from .reporting import write_reports
+from .reporting import write_reports, write_history_dashboard
 from .tools import discover_tools
 from .pdks import inspect_profile, list_profiles
 from .tool_catalog import list_tool_catalog
+from .report_analysis import compare_reports, triage_log, write_json
+from .evidence_bundle import create_bundle, verify_bundle
+from .evidence_signing import sign_bundle, verify_bundle_signature
+from .governance import create_run_identity, evaluate_policy, generate_sbom, inventory_inputs, evaluate_baseline_freshness, inventory_license_notices
+from .regression_intelligence import cluster_failures, detect_flaky_runs, ingest_cobertura_coverage
+from .operations import (build_provenance, cleanup_workspace, estimate_resources, evaluate_approval, evidence_scorecard, map_change_impact, record_retention_action, apply_retention_action, validate_waiver)
+from .quality_gates import evaluate_mutation_results, validate_golden_corpus
+from .contracts import cli_contract
+from .history import minimize_failure_cover, regression_history
+from .config_validation import load_and_validate_config
+from .job_queue import enqueue as enqueue_job, get_job, list_jobs, claim_next, cancel_job, transition as transition_job, job_health, finish_job
+from .waiver_register import create_waiver, get_waiver, list_waivers, revoke_waiver
+from .approval_register import create_approval, get_approval, list_approvals
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mqv-eda", description="MAH Quantum Verify local EDA verification runner")
     sub = parser.add_subparsers(dest="command", required=True)
+    contract = sub.add_parser("contract", help="Print the versioned CLI contract and exit-code semantics")
+    contract.add_argument("--out", type=Path, help="Optional path to save contract JSON")
     doctor = sub.add_parser("doctor", help="Discover installed EDA tools and versions")
     doctor.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
     pdks = sub.add_parser("pdks", help="List PDK profiles or inspect a local PDK root")
@@ -21,6 +36,195 @@ def build_parser() -> argparse.ArgumentParser:
     pdks.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
     catalog = sub.add_parser("tool-catalog", help="List tool integration and validation states")
     catalog.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    bundle = sub.add_parser("bundle", help="Create or verify an integrity-checked evidence ZIP")
+    bundle_sub = bundle.add_subparsers(dest="bundle_action", required=True)
+    bundle_create = bundle_sub.add_parser("create", help="Create a bundle from an evidence directory")
+    bundle_create.add_argument("source", type=Path)
+    bundle_create.add_argument("output", type=Path)
+    bundle_create.add_argument("--project", help="Optional non-sensitive project label")
+    bundle_verify = bundle_sub.add_parser("verify", help="Verify a bundle and its file hashes")
+    bundle_verify.add_argument("archive", type=Path)
+    sign = sub.add_parser("sign-evidence", help="Create a detached OpenSSL signature for an evidence bundle")
+    sign.add_argument("bundle", type=Path)
+    sign.add_argument("--private-key", type=Path, required=True)
+    sign.add_argument("--signature", type=Path, required=True)
+    sigverify = sub.add_parser("verify-evidence-signature", help="Verify a detached evidence signature")
+    sigverify.add_argument("bundle", type=Path)
+    sigverify.add_argument("--public-key", type=Path, required=True)
+    sigverify.add_argument("--signature", type=Path, required=True)
+    sign_prov = sub.add_parser("sign-provenance", help="Sign a provenance JSON file with an operator-managed key")
+    sign_prov.add_argument("provenance", type=Path)
+    sign_prov.add_argument("--private-key", type=Path, required=True)
+    sign_prov.add_argument("--signature", type=Path, required=True)
+    verify_prov = sub.add_parser("verify-provenance-signature", help="Verify a detached provenance signature")
+    verify_prov.add_argument("provenance", type=Path)
+    verify_prov.add_argument("--public-key", type=Path, required=True)
+    verify_prov.add_argument("--signature", type=Path, required=True)
+    compare = sub.add_parser("compare", help="Compare two JSON evidence reports and identify regressions")
+    compare.add_argument("baseline", type=Path)
+    compare.add_argument("candidate", type=Path)
+    compare.add_argument("--out", type=Path, default=Path("mqv-compare.json"))
+    triage = sub.add_parser("triage", help="Produce evidence-linked deterministic suggestions from a tool log")
+    triage.add_argument("log", type=Path)
+    triage.add_argument("--out", type=Path, default=Path("mqv-triage.json"))
+    inventory = sub.add_parser("inventory", help="Hash project inputs and emit a stable input fingerprint")
+    inventory.add_argument("source", type=Path)
+    inventory.add_argument("--out", type=Path, default=Path("mqv-input-inventory.json"))
+    identity = sub.add_parser("run-identity", help="Create a run ID bound to inputs, config, and declared toolchain")
+    identity.add_argument("source", type=Path)
+    identity.add_argument("--config", type=Path, help="JSON configuration snapshot")
+    identity.add_argument("--toolchain", type=Path, help="JSON toolchain identity snapshot")
+    identity.add_argument("--out", type=Path, default=Path("mqv-run-identity.json"))
+    policy = sub.add_parser("policy", help="Evaluate a report against a fail-closed JSON policy")
+    policy.add_argument("report", type=Path)
+    policy.add_argument("policy_file", type=Path)
+    policy.add_argument("--dry-run", action="store_true", help="Produce advisory preview; never grants approval")
+    policy.add_argument("--out", type=Path, default=Path("mqv-policy-decision.json"))
+    baseline = sub.add_parser("baseline-freshness", help="Fail closed on stale or unverifiable report baselines")
+    baseline.add_argument("baseline_report", type=Path)
+    baseline.add_argument("current_report", type=Path)
+    baseline.add_argument("--max-age-seconds", type=int, default=604800)
+    baseline.add_argument("--allow-revision-change", action="store_true")
+    baseline.add_argument("--out", type=Path, default=Path("mqv-baseline-freshness.json"))
+    sbom = sub.add_parser("sbom", help="Generate a dependency inventory for the active Python environment")
+    license_inventory = sub.add_parser("license-inventory", help="Inventory license and notice files without inferring redistribution rights")
+    license_inventory.add_argument("root", type=Path)
+    license_inventory.add_argument("--out", type=Path, default=Path("mqv-license-inventory.json"))
+    sbom.add_argument("--out", type=Path, default=Path("mqv-sbom.json"))
+    flaky = sub.add_parser("flaky", help="Compare repeated reports for outcome variation")
+    flaky.add_argument("reports", nargs="+", type=Path)
+    flaky.add_argument("--out", type=Path, default=Path("mqv-flaky-analysis.json"))
+    clusters = sub.add_parser("cluster-failures", help="Cluster logs using transparent normalized signatures")
+    clusters.add_argument("logs", nargs="+", type=Path)
+    clusters.add_argument("--out", type=Path, default=Path("mqv-failure-clusters.json"))
+    coverage = sub.add_parser("coverage", help="Import Cobertura-style XML line and branch coverage")
+    coverage.add_argument("xml", type=Path)
+    coverage.add_argument("--out", type=Path, default=Path("mqv-coverage.json"))
+    scorecard = sub.add_parser("evidence-scorecard", help="Explain missing, present, and stale expected evidence")
+    scorecard.add_argument("root", type=Path)
+    scorecard.add_argument("--expect", action="append", required=True, help="Expected relative path (repeatable)")
+    scorecard.add_argument("--max-age-seconds", type=int)
+    scorecard.add_argument("--out", type=Path, default=Path("mqv-evidence-scorecard.json"))
+    provenance = sub.add_parser("provenance", help="Link run identity, report, and bundle hashes")
+    provenance.add_argument("root", type=Path)
+    provenance.add_argument("--identity", type=Path)
+    provenance.add_argument("--report", type=Path)
+    provenance.add_argument("--bundle", type=Path)
+    provenance.add_argument("--out", type=Path, default=Path("mqv-provenance.json"))
+    approval = sub.add_parser("approval-record", help="Record a review decision with separation-of-duties checks")
+    approval.add_argument("policy_decision", type=Path)
+    approval.add_argument("--actor", required=True)
+    approval.add_argument("--role", required=True)
+    approval.add_argument("--operator")
+    approval.add_argument("--policy-author")
+    approval.add_argument("--rationale", required=True)
+    approval.add_argument("--approve", action="store_true")
+    approval.add_argument("--allow-self-approval", action="store_true", help="Disable separation-of-duties check (not recommended)")
+    approval.add_argument("--out", type=Path, default=Path("mqv-approval.json"))
+    waiver = sub.add_parser("validate-waiver", help="Validate waiver completeness, expiry, and scope")
+    waiver.add_argument("waiver", type=Path)
+    waiver.add_argument("--scope")
+    waiver.add_argument("--out", type=Path, default=Path("mqv-waiver-validation.json"))
+    impact = sub.add_parser("change-impact", help="Map changed files to explicitly configured checks")
+    impact.add_argument("changes", type=Path, help="JSON array of changed paths")
+    impact.add_argument("rules", type=Path, help="JSON object mapping glob patterns to check names")
+    impact.add_argument("--out", type=Path, default=Path("mqv-change-impact.json"))
+    estimate = sub.add_parser("estimate-resources", help="Produce a coarse resource planning estimate")
+    estimate.add_argument("--source-bytes", type=int, required=True)
+    estimate.add_argument("--file-count", type=int, required=True)
+    estimate.add_argument("--timeout-seconds", type=int, default=120)
+    estimate.add_argument("--profile", choices=["generic", "simulation", "formal", "physical"], default="generic")
+    estimate.add_argument("--out", type=Path, default=Path("mqv-resource-estimate.json"))
+    cleanup = sub.add_parser("cleanup-workspace", help="Safely preview or remove a dedicated workspace")
+    cleanup.add_argument("workspace", type=Path)
+    cleanup.add_argument("--allowed-root", type=Path, required=True)
+    cleanup.add_argument("--execute", action="store_true", help="Actually remove the workspace; default is dry-run")
+    retention = sub.add_parser("retention-record", help="Record or execute guarded file retention actions (dry-run by default)")
+    retention.add_argument("path", type=Path)
+    retention.add_argument("--action", choices=["retain", "archive", "delete"], required=True)
+    retention.add_argument("--reason", required=True)
+    retention.add_argument("--actor", required=True)
+    retention.add_argument("--until")
+    retention.add_argument("--execute", action="store_true", help="Actually apply action; otherwise dry-run")
+    retention.add_argument("--archive-to", type=Path, help="New file path for archive action")
+    retention.add_argument("--confirm-sha256", help="Required digest confirmation for deletion")
+    retention.add_argument("--out", type=Path, default=Path("mqv-retention-record.json"))
+    mutation = sub.add_parser("mutation-score", help="Calculate benchmark metrics from observed mutant outcomes")
+    mutation.add_argument("results", type=Path, help="JSON array of mutant IDs, expected detection, and observed statuses")
+    mutation.add_argument("--out", type=Path, default=Path("mqv-mutation-score.json"))
+    golden = sub.add_parser("golden-corpus", help="Verify fixture hashes and expected outcomes against a manifest")
+    golden.add_argument("root", type=Path)
+    golden.add_argument("manifest", type=Path)
+    golden.add_argument("--out", type=Path, default=Path("mqv-golden-corpus.json"))
+    history = sub.add_parser("history", help="Summarize ordered regression reports without hiding failures")
+    history_dashboard = sub.add_parser("history-dashboard", help="Render an accessible HTML regression dashboard")
+    history_dashboard.add_argument("reports", type=Path, nargs="+")
+    history_dashboard.add_argument("--out", type=Path, default=Path("mqv-regression-dashboard.html"))
+    history.add_argument("reports", nargs="+", type=Path)
+    history.add_argument("--out", type=Path, default=Path("mqv-regression-history.json"))
+    minimize = sub.add_parser("minimize-failures", help="Suggest a smaller test subset from failure-ID mappings")
+    minimize.add_argument("cases", type=Path)
+    minimize.add_argument("--out", type=Path, default=Path("mqv-minimized-tests.json"))
+    validate_config = sub.add_parser("validate-config", help="Validate project inputs and settings before tool execution")
+    validate_config.add_argument("config", type=Path)
+    validate_config.add_argument("source", type=Path)
+    validate_config.add_argument("--out", type=Path, default=Path("mqv-config-validation.json"))
+    jobs = sub.add_parser("jobs", help="Inspect durable local verification jobs")
+    jobs.add_argument("--db", type=Path, default=Path(".mqv/jobs.sqlite3"))
+    jobs.add_argument("--limit", type=int, default=100)
+    jobs_sub = jobs.add_subparsers(dest="jobs_action", required=True)
+    jobs_sub.add_parser("list", help="List recent jobs")
+    jobs_sub.add_parser("health", help="Summarize queue states")
+    job_submit = jobs_sub.add_parser("submit", help="Queue a JSON job payload")
+    job_submit.add_argument("payload", type=Path)
+    job_submit.add_argument("--actor", default="cli")
+    job_show = jobs_sub.add_parser("show", help="Show a job and its event history")
+    job_show.add_argument("job_id")
+    job_cancel = jobs_sub.add_parser("cancel", help="Cancel queued job or request cooperative cancellation")
+    job_cancel.add_argument("job_id")
+    job_cancel.add_argument("--actor", default="cli")
+    job_claim = jobs_sub.add_parser("claim", help="Atomically claim the next queued job for a worker")
+    job_claim.add_argument("--worker-id", required=True)
+    job_finish = jobs_sub.add_parser("finish", help="Record a worker-reported terminal outcome")
+    job_finish.add_argument("job_id")
+    job_finish.add_argument("--worker-id", required=True)
+    job_finish.add_argument("--state", choices=["SUCCEEDED", "FAILED", "CANCELLED"], required=True)
+    job_finish.add_argument("--detail", default="")
+    job_finish.add_argument("--error")
+    job_worker = jobs_sub.add_parser("run-once", help="Claim and execute one queued EDA verification job locally")
+    job_worker.add_argument("--worker-id", required=True)
+    waivers = sub.add_parser("waivers", help="Manage durable local policy-waiver records")
+    waivers.add_argument("--db", type=Path, default=Path(".mqv/governance.sqlite3"))
+    waivers_sub = waivers.add_subparsers(dest="waivers_action", required=True)
+    waivers_sub.add_parser("list", help="List waiver records and their current status")
+    waiver_create = waivers_sub.add_parser("create", help="Create a scoped waiver with mandatory expiry")
+    waiver_create.add_argument("--rule-id", required=True)
+    waiver_create.add_argument("--scope", type=Path, required=True, help="JSON object with exact-match scope keys")
+    waiver_create.add_argument("--reason", required=True)
+    waiver_create.add_argument("--created-by", required=True)
+    waiver_create.add_argument("--expires-at", type=float, required=True, help="Expiry as Unix timestamp")
+    waiver_show = waivers_sub.add_parser("show", help="Show waiver record and audit events")
+    waiver_show.add_argument("waiver_id")
+    waiver_revoke = waivers_sub.add_parser("revoke", help="Revoke an active waiver")
+    waiver_revoke.add_argument("waiver_id")
+    waiver_revoke.add_argument("--actor", required=True)
+    waiver_revoke.add_argument("--reason", required=True)
+    approvals = sub.add_parser("approvals", help="Record and inspect durable local review decisions")
+    approvals.add_argument("--db", type=Path, default=Path(".mqv/approvals.sqlite3"))
+    approvals_sub = approvals.add_subparsers(dest="approvals_action", required=True)
+    approvals_sub.add_parser("list", help="List recorded approval decisions")
+    approval_show = approvals_sub.add_parser("show", help="Show an approval decision and audit events")
+    approval_show.add_argument("approval_id")
+    approval_create = approvals_sub.add_parser("create", help="Record a decision against a report hash")
+    approval_create.add_argument("--run-id", required=True)
+    approval_create.add_argument("--report-sha256", required=True)
+    approval_create.add_argument("--actor", required=True)
+    approval_create.add_argument("--role", required=True)
+    approval_create.add_argument("--decision", choices=["APPROVE", "REJECT"], required=True)
+    approval_create.add_argument("--rationale", required=True)
+    approval_create.add_argument("--run-operator")
+    approval_create.add_argument("--policy-author")
+    approval_create.add_argument("--allow-self-approval", action="store_true")
     verify = sub.add_parser("verify", help="Run applicable EDA checks on a project folder or ZIP")
     verify.add_argument("source", type=Path)
     verify.add_argument("--top", help="Explicit RTL top-level module")
@@ -35,10 +239,139 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument("--lvs-netlist", type=Path, help="Reference source netlist for LVS")
     verify.add_argument("--out", type=Path, default=Path("mqv-report"))
     verify.add_argument("--timeout", type=float, default=120)
+    repro = sub.add_parser("repro-check", help="Execute repeated runs and compare verification outcomes")
+    repro.add_argument("source", type=Path)
+    repro.add_argument("--runs", type=int, default=3)
+    repro.add_argument("--top")
+    repro.add_argument("--testbench", type=Path, action="append", default=[])
+    repro.add_argument("--sim-top")
+    repro.add_argument("--timeout", type=float, default=120)
+    repro.add_argument("--out", type=Path, default=Path("mqv-repro-check"))
     return parser
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "approvals":
+        try:
+            if args.approvals_action == "create":
+                result = create_approval(
+                    args.db, run_id=args.run_id, report_sha256=args.report_sha256,
+                    actor=args.actor, role=args.role, decision=args.decision, rationale=args.rationale,
+                    run_operator=args.run_operator, policy_author=args.policy_author,
+                    require_separation=not args.allow_self_approval,
+                )
+            elif args.approvals_action == "show":
+                result = get_approval(args.db, args.approval_id)
+            else:
+                result = {"approvals": list_approvals(args.db)}
+        except (OSError, ValueError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2, sort_keys=True))
+        if args.approvals_action == "create" and result.get("status") == "BLOCKED":
+            return 2
+        return 0
+    if args.command == "waivers":
+        try:
+            if args.waivers_action == "create":
+                scope = json.loads(args.scope.read_text(encoding="utf-8"))
+                result = create_waiver(args.db, rule_id=args.rule_id, scope=scope,
+                                       reason=args.reason, created_by=args.created_by,
+                                       expires_at=args.expires_at)
+            elif args.waivers_action == "show":
+                result = get_waiver(args.db, args.waiver_id)
+            elif args.waivers_action == "revoke":
+                result = revoke_waiver(args.db, args.waiver_id,
+                                       actor=args.actor, reason=args.reason)
+            else:
+                result = {"waivers": list_waivers(args.db)}
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+    if args.command == "jobs":
+        try:
+            if args.jobs_action == "submit":
+                payload = json.loads(args.payload.read_text(encoding="utf-8"))
+                result = enqueue_job(args.db, payload, actor=args.actor)
+            elif args.jobs_action == "show":
+                result = get_job(args.db, args.job_id)
+            elif args.jobs_action == "list":
+                result = {"jobs": list_jobs(args.db, limit=args.limit)}
+            elif args.jobs_action == "health":
+                result = job_health(args.db)
+            elif args.jobs_action == "claim":
+                result = {"job": claim_next(args.db, worker_id=args.worker_id)}
+            elif args.jobs_action == "cancel":
+                result = cancel_job(args.db, args.job_id, actor=args.actor)
+            elif args.jobs_action == "run-once":
+                job = claim_next(args.db, worker_id=args.worker_id)
+                if job is None:
+                    result = {"worker_id": args.worker_id, "state": "IDLE", "detail": "No queued jobs"}
+                else:
+                    payload = job["payload"]
+                    if not isinstance(payload, dict) or not isinstance(payload.get("source"), str):
+                        finish_job(args.db, job["id"], worker_id=args.worker_id, state="FAILED",
+                                   detail="Invalid payload: source must be a path string",
+                                   error="payload validation failed")
+                        raise ValueError("job payload must contain a string 'source' path")
+                    try:
+                        source = Path(payload["source"])
+                        output_dir = Path(payload.get("output_dir", ".mqv/job-runs/" + job["id"]))
+                        results = run_project(
+                            source, output_dir, top=payload.get("top"),
+                            testbenches=[Path(p) for p in payload.get("testbenches", [])],
+                            sim_top=payload.get("sim_top"), timeout=float(payload.get("timeout", 120)),
+                        )
+                        toolchain_snapshot = discover_tools()
+                        project_root = (source.resolve() if source.is_dir()
+                                        else (output_dir / "workspace" / "source").resolve())
+                        identity = create_run_identity(
+                            project_root,
+                            configuration={"top": payload.get("top"), "sim_top": payload.get("sim_top"),
+                                           "testbenches": payload.get("testbenches", []),
+                                           "timeout_seconds": float(payload.get("timeout", 120))},
+                            toolchain=toolchain_snapshot,
+                        )
+                        paths = write_reports(output_dir, results, {
+                            "job_id": job["id"], "worker_id": args.worker_id,
+                            "toolchain_snapshot": toolchain_snapshot, "run_identity": identity,
+                        })
+                        provenance = build_provenance(project_root, run_identity=identity,
+                                                      report_path=paths["json"])
+                        (output_dir / "provenance.json").write_text(
+                            json.dumps(provenance, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+                        overall = aggregate_status(results)
+                        terminal = "SUCCEEDED" if overall == Status.PASS else "FAILED"
+                        result = finish_job(args.db, job["id"], worker_id=args.worker_id, state=terminal,
+                                            detail=f"Verification overall status: {overall.value}; report: {paths['json']}",
+                                            error=None if terminal == "SUCCEEDED" else overall.value)
+                        result["report_json"] = str(paths["json"])
+                        result["report_html"] = str(paths["html"])
+                        result["provenance_json"] = str(output_dir / "provenance.json")
+                    except Exception as exc:
+                        finish_job(args.db, job["id"], worker_id=args.worker_id, state="FAILED",
+                                   detail="Worker execution raised an exception", error=str(exc))
+                        raise
+            else:
+                result = finish_job(args.db, args.job_id, worker_id=args.worker_id, state=args.state,
+                                    detail=args.detail, error=args.error)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2, sort_keys=True))
+        if args.jobs_action == "run-once" and result.get("state") == "FAILED":
+            return 1
+        return 0
+    if args.command == "contract":
+        result = cli_contract()
+        rendered = json.dumps(result, indent=2, sort_keys=True)
+        if args.out:
+            args.out.parent.mkdir(parents=True, exist_ok=True)
+            args.out.write_text(rendered + "\n", encoding="utf-8")
+        print(rendered)
+        return 0
     if args.command == "doctor":
         info = discover_tools()
         print(json.dumps(info, indent=2))
@@ -53,15 +386,302 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if result["state"] == "COLLATERAL_PRESENT_NOT_VALIDATED" else 2
         print(json.dumps(list_profiles(), indent=2))
         return 0
+    if args.command == "history-dashboard":
+        try:
+            history_data = regression_history(args.reports)
+            path = write_history_dashboard(history_data, args.out)
+        except (OSError, ValueError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps({"status": "GENERATED", "dashboard": str(path), "runs": len(history_data["runs"])}, indent=2))
+        return 0
     if args.command == "tool-catalog":
         print(json.dumps(list_tool_catalog(), indent=2))
         return 0
+    if args.command == "sign-evidence":
+        try:
+            result = sign_bundle(args.bundle, args.private_key, args.signature)
+        except (OSError, ValueError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2))
+        return 0
+    if args.command == "verify-evidence-signature":
+        try:
+            result = verify_bundle_signature(args.bundle, args.public_key, args.signature)
+        except (OSError, ValueError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2))
+        return 0 if result["valid"] else 2
+    if args.command == "sign-provenance":
+        try:
+            result = sign_bundle(args.provenance, args.private_key, args.signature)
+            result["signed_artifact"] = "provenance"
+        except (OSError, ValueError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2))
+        return 0
+    if args.command == "verify-provenance-signature":
+        try:
+            result = verify_bundle_signature(args.provenance, args.public_key, args.signature)
+            result["verified_artifact"] = "provenance"
+        except (OSError, ValueError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2))
+        return 0 if result["valid"] else 2
+    if args.command == "bundle":
+        try:
+            if args.bundle_action == "create":
+                result = create_bundle(args.source, args.output, metadata={"project": args.project} if args.project else {})
+                print(json.dumps({k: v for k, v in result.items() if k != "manifest"}, indent=2))
+                return 0
+            result = verify_bundle(args.archive)
+        except (OSError, ValueError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2))
+        return 0 if result["status"] == "PASS" else 2
+    if args.command == "compare":
+        try:
+            result = compare_reports(args.baseline, args.candidate)
+            write_json(result, args.out)
+        except (OSError, ValueError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2))
+        print(f"Comparison evidence: {args.out}")
+        return 1 if result["regression_count"] else 0
+    if args.command == "triage":
+        try:
+            result = triage_log(args.log)
+            write_json(result, args.out)
+        except (OSError, ValueError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2))
+        print(f"Triage evidence: {args.out}")
+        return 0
+    if args.command in {"inventory", "run-identity", "baseline-freshness", "license-inventory", "policy", "sbom", "flaky", "cluster-failures", "coverage", "evidence-scorecard", "provenance", "approval-record", "validate-waiver", "change-impact", "estimate-resources", "cleanup-workspace", "retention-record", "mutation-score", "golden-corpus", "history", "minimize-failures", "validate-config"}:
+        try:
+            if args.command == "inventory":
+                result = inventory_inputs(args.source)
+            elif args.command == "run-identity":
+                config = json.loads(args.config.read_text(encoding="utf-8")) if args.config else {}
+                toolchain = json.loads(args.toolchain.read_text(encoding="utf-8")) if args.toolchain else {}
+                if not isinstance(config, dict) or not isinstance(toolchain, dict):
+                    raise ValueError("--config and --toolchain must each contain a JSON object")
+                result = create_run_identity(args.source, configuration=config, toolchain=toolchain)
+            elif args.command == "baseline-freshness":
+                baseline_report = json.loads(args.baseline_report.read_text(encoding="utf-8"))
+                current_report = json.loads(args.current_report.read_text(encoding="utf-8"))
+                result = evaluate_baseline_freshness(
+                    baseline_report, current_report, max_age_seconds=args.max_age_seconds,
+                    require_same_revision=not args.allow_revision_change,
+                )
+            elif args.command == "policy":
+                report = json.loads(args.report.read_text(encoding="utf-8"))
+                policy_doc = json.loads(args.policy_file.read_text(encoding="utf-8"))
+                result = evaluate_policy(report, policy_doc, dry_run=args.dry_run)
+            elif args.command == "license-inventory":
+                result = inventory_license_notices(args.root)
+            elif args.command == "sbom":
+                result = generate_sbom()
+            elif args.command == "flaky":
+                result = detect_flaky_runs(args.reports)
+            elif args.command == "cluster-failures":
+                result = cluster_failures(args.logs)
+            elif args.command == "coverage":
+                result = ingest_cobertura_coverage(args.xml)
+            elif args.command == "evidence-scorecard":
+                result = evidence_scorecard(args.root, args.expect, max_age_seconds=args.max_age_seconds)
+            elif args.command == "provenance":
+                identity_doc = json.loads(args.identity.read_text(encoding="utf-8")) if args.identity else None
+                result = build_provenance(args.root, run_identity=identity_doc, report_path=args.report, bundle_path=args.bundle)
+            elif args.command == "approval-record":
+                decision = json.loads(args.policy_decision.read_text(encoding="utf-8"))
+                result = evaluate_approval(policy_decision=decision, actor=args.actor, role=args.role,
+                    run_operator=args.operator, policy_author=args.policy_author, rationale=args.rationale,
+                    approved=args.approve, require_separation=not args.allow_self_approval)
+            elif args.command == "validate-waiver":
+                waiver_doc = json.loads(args.waiver.read_text(encoding="utf-8"))
+                result = validate_waiver(waiver_doc, requested_scope=args.scope)
+            elif args.command == "change-impact":
+                changes = json.loads(args.changes.read_text(encoding="utf-8"))
+                rules = json.loads(args.rules.read_text(encoding="utf-8"))
+                if not isinstance(changes, list) or not isinstance(rules, dict):
+                    raise ValueError("changes must be a JSON array and rules must be a JSON object")
+                result = map_change_impact(changes, rules)
+            elif args.command == "estimate-resources":
+                result = estimate_resources(source_bytes=args.source_bytes, file_count=args.file_count,
+                    requested_timeout_seconds=args.timeout_seconds, profile=args.profile)
+            elif args.command == "cleanup-workspace":
+                result = cleanup_workspace(args.workspace, args.allowed_root, dry_run=not args.execute)
+            elif args.command == "mutation-score":
+                records = json.loads(args.results.read_text(encoding="utf-8"))
+                result = evaluate_mutation_results(records)
+            elif args.command == "golden-corpus":
+                result = validate_golden_corpus(args.root, args.manifest)
+            elif args.command == "history":
+                result = regression_history(args.reports)
+            elif args.command == "minimize-failures":
+                cases = json.loads(args.cases.read_text(encoding="utf-8"))
+                result = minimize_failure_cover(cases)
+            elif args.command == "validate-config":
+                result = load_and_validate_config(args.config, args.source)
+            else:
+                if args.execute:
+                    result = apply_retention_action(args.path, action=args.action, reason=args.reason,
+                        actor=args.actor, archive_to=args.archive_to,
+                        expected_sha256=args.confirm_sha256, dry_run=False)
+                else:
+                    result = apply_retention_action(args.path, action=args.action, reason=args.reason,
+                        actor=args.actor, archive_to=args.archive_to,
+                        expected_sha256=args.confirm_sha256, dry_run=True)
+                    result["retention_until_utc"] = args.until
+            out_path = getattr(args, "out", None) or Path("mqv-cleanup-result.json")
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps({k: v for k, v in result.items() if k not in {"files", "inventory", "components", "stages", "clusters", "items"}}, indent=2))
+        print(f"Evidence: {out_path}")
+        if args.command == "policy":
+            return 0 if result["eligible_for_human_review"] else 2
+        if args.command == "baseline-freshness":
+            return 0 if result["fresh"] else 2
+        if args.command == "approval-record":
+            return 0 if result["status"] == "APPROVED" else 2
+        if args.command == "validate-waiver":
+            return 0 if result["valid"] else 2
+        if args.command == "golden-corpus":
+            return 0 if result["status"] == "PASS" else 2
+        if args.command == "validate-config":
+            return 0 if result["valid"] else 2
+        return 0
+    if args.command == "repro-check":
+        try:
+            if args.runs < 2 or args.runs > 10:
+                raise ValueError("--runs must be between 2 and 10")
+            source = args.source.resolve()
+            out_root = args.out.resolve()
+            if source.is_dir():
+                try:
+                    out_root.relative_to(source)
+                    raise ValueError("Output directory must not be inside the source project")
+                except ValueError as exc:
+                    if str(exc) == "Output directory must not be inside the source project":
+                        raise
+            if not source.exists():
+                raise ValueError("Source path does not exist")
+            toolchain_snapshot = discover_tools()
+            run_records = []
+            reference_fingerprint = None
+            for index in range(1, args.runs + 1):
+                run_dir = out_root / f"run-{index:02d}"
+                if source.is_dir():
+                    fingerprint = inventory_inputs(source)["input_fingerprint_sha256"]
+                    project_root = source
+                elif source.is_file() and source.suffix.lower() == ".zip":
+                    from .governance import sha256_file
+                    fingerprint = sha256_file(source)
+                    project_root = (run_dir / "workspace" / "source").resolve()
+                else:
+                    raise ValueError("Source must be a project directory or ZIP archive")
+                if reference_fingerprint is None:
+                    reference_fingerprint = fingerprint
+                results = run_project(source, run_dir, top=args.top, testbenches=args.testbench,
+                                      sim_top=args.sim_top, timeout=args.timeout)
+                if not source.is_dir():
+                    project_root = (run_dir / "workspace" / "source").resolve()
+                identity = create_run_identity(
+                    project_root,
+                    configuration={"top": args.top, "sim_top": args.sim_top,
+                                   "testbenches": [str(p) for p in args.testbench],
+                                   "timeout_seconds": args.timeout, "repro_run_index": index},
+                    toolchain=toolchain_snapshot,
+                )
+                paths = write_reports(run_dir, results, {
+                    "repro_run_index": index, "input_fingerprint_sha256": fingerprint,
+                    "toolchain_snapshot": toolchain_snapshot, "run_identity": identity,
+                })
+                provenance = build_provenance(project_root, run_identity=identity, report_path=paths["json"])
+                (run_dir / "provenance.json").write_text(
+                    json.dumps(provenance, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+                signature = [
+                    {"stage": r.stage, "status": r.status.value, "required": r.required,
+                     "exit_code": r.exit_code}
+                    for r in sorted(results, key=lambda item: (item.stage, item.required))
+                ]
+                run_records.append({
+                    "run_index": index, "overall_status": aggregate_status(results).value,
+                    "input_fingerprint_sha256": fingerprint, "check_signature": signature,
+                    "report_json": str(paths["json"]), "provenance_json": str(run_dir / "provenance.json"),
+                })
+            fingerprints = {record["input_fingerprint_sha256"] for record in run_records}
+            signatures = {json.dumps(record["check_signature"], sort_keys=True) for record in run_records}
+            checks_executed = all(bool(record["check_signature"]) for record in run_records)
+            if len(fingerprints) != 1:
+                status = "INPUTS_CHANGED"
+            elif not checks_executed:
+                status = "NO_CHECKS_RECORDED"
+            elif len(signatures) != 1:
+                status = "NONDETERMINISTIC_OUTCOME"
+            else:
+                status = "REPRODUCIBLE_OUTCOME"
+            summary = {
+                "schema": "mqv-repro-check/1.0", "status": status,
+                "runs_requested": args.runs, "runs_completed": len(run_records),
+                "input_fingerprint_stable": len(fingerprints) == 1,
+                "outcome_signature_stable": len(signatures) == 1,
+                "checks_recorded_in_every_run": checks_executed,
+                "runs": run_records,
+                "limitations": [
+                    "This compares check outcomes, not byte-for-byte report, waveform, netlist, or layout reproducibility.",
+                    "A stable outcome does not prove the RTL is correct or fabrication-ready.",
+                    "Only checks actually executed and recorded by the engine are compared.",
+                ],
+            }
+            out_root.mkdir(parents=True, exist_ok=True)
+            summary_path = out_root / "reproducibility-summary.json"
+            summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            print(json.dumps(summary, indent=2, sort_keys=True))
+            print(f"Evidence: {summary_path}")
+            return 0 if status == "REPRODUCIBLE_OUTCOME" else 1
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
     try:
         results = run_project(args.source, args.out, top=args.top, testbenches=args.testbench,
                               sim_top=args.sim_top, netlist=args.netlist, liberty=args.liberty,
                               sdc=args.sdc, gds=args.gds, drc_deck=args.drc_deck,
                               lvs_deck=args.lvs_deck, lvs_netlist=args.lvs_netlist, timeout=args.timeout)
-        paths = write_reports(args.out, results, {"source": str(args.source.resolve()), "top": args.top})
+        # Capture the declared toolchain and bind evidence to a stable input snapshot.
+        # The snapshot is an execution record, not a guarantee that every optional tool ran.
+        project_root = (args.source.resolve() if args.source.is_dir()
+                        else (args.out / "workspace" / "source").resolve())
+        toolchain_snapshot = discover_tools()
+        run_identity = create_run_identity(
+            project_root,
+            configuration={
+                "top": args.top, "sim_top": args.sim_top,
+                "testbenches": [str(p) for p in (args.testbench or [])],
+                "timeout_seconds": args.timeout,
+            },
+            toolchain=toolchain_snapshot,
+        )
+        paths = write_reports(args.out, results, {
+            "source": str(args.source.resolve()), "top": args.top,
+            "toolchain_snapshot": toolchain_snapshot,
+            "run_identity": run_identity,
+        })
+        provenance = build_provenance(project_root, run_identity=run_identity,
+                                      report_path=paths["json"])
+        (args.out / "provenance.json").write_text(
+            json.dumps(provenance, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     except (OSError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
@@ -71,6 +691,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{result.status.value:12} {result.stage}: {result.message}")
     print(f"JSON evidence: {paths['json']}")
     print(f"HTML report:   {paths['html']}")
+    print(f"Provenance:    {args.out / 'provenance.json'}")
     if overall == Status.PASS:
         return 0
     if overall == Status.FAIL:
