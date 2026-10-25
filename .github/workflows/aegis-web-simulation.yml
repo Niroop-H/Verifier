@@ -1,0 +1,101 @@
+name: AEGIS Web RTL Simulation
+run-name: AEGIS-WEB-${{ inputs.job_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: Unique web job identifier
+        required: true
+        type: string
+      rtl_base64:
+        description: Base64 encoded RTL source (max practical size 40 KB)
+        required: true
+        type: string
+      testbench_base64:
+        description: Base64 encoded testbench source (max practical size 20 KB)
+        required: true
+        type: string
+      top_module:
+        description: RTL top module name
+        required: true
+        type: string
+      testbench_top:
+        description: Testbench top module name
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Install Icarus Verilog
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iverilog
+      - name: Run bounded RTL simulation
+        env:
+          RTL_B64: ${{ inputs.rtl_base64 }}
+          TB_B64: ${{ inputs.testbench_base64 }}
+          TOP: ${{ inputs.top_module }}
+          TB_TOP: ${{ inputs.testbench_top }}
+          JOB_ID: ${{ inputs.job_id }}
+        run: |
+          set +e
+          mkdir -p web-results
+          python3 - <<'PY'
+          import base64, os, re, pathlib
+          for key, name in [('RTL_B64','design.v'), ('TB_B64','testbench.v')]:
+              raw = base64.b64decode(os.environ[key], validate=True)
+              if len(raw) > (40000 if name == 'design.v' else 20000):
+                  raise SystemExit(f'{name} exceeds size limit')
+              pathlib.Path('web-results', name).write_bytes(raw)
+          for key in ('TOP','TB_TOP'):
+              if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_$]*', os.environ[key]):
+                  raise SystemExit(f'Invalid module name: {key}')
+          PY
+          if [ $? -ne 0 ]; then exit 1; fi
+          iverilog -g2012 -Wall -s "$TB_TOP" -o web-results/sim.vvp web-results/design.v web-results/testbench.v >web-results/compile.log 2>&1
+          COMPILE=$?
+          if [ "$COMPILE" -eq 0 ]; then
+            vvp web-results/sim.vvp >web-results/simulation.log 2>&1
+            SIM=$?
+          else
+            SIM=99
+            : >web-results/simulation.log
+          fi
+          python3 - <<'PY'
+          import json, os, pathlib
+          d=pathlib.Path('web-results')
+          compile_log=(d/'compile.log').read_text(errors='replace')[-12000:]
+          sim_log=(d/'simulation.log').read_text(errors='replace')[-12000:]
+          compile_code=int(os.environ.get('COMPILE_CODE','0'))
+          # derive status from the logs/return-code marker files written below
+          c=(d/'compile.exit').read_text().strip() if (d/'compile.exit').exists() else 'unknown'
+          s=(d/'sim.exit').read_text().strip() if (d/'sim.exit').exists() else 'not_run'
+          status='PASS' if c=='0' and s=='0' else ('FAIL' if c=='0' else 'ERROR')
+          (d/'result.json').write_text(json.dumps({'job_id':os.environ['JOB_ID'],'engine':'Icarus Verilog / VVP','status':status,'compile_exit_code':c,'simulation_exit_code':s,'compile_log':compile_log,'simulation_log':sim_log},indent=2))
+          PY
+          echo "$COMPILE" > web-results/compile.exit
+          echo "$SIM" > web-results/sim.exit
+          # Rebuild final result with exact exit codes.
+          python3 - <<'PY'
+          import json, pathlib
+          d=pathlib.Path('web-results'); r=json.loads((d/'result.json').read_text())
+          c=(d/'compile.exit').read_text().strip(); s=(d/'sim.exit').read_text().strip()
+          r.update(compile_exit_code=int(c),simulation_exit_code=(int(s) if s.isdigit() else s))
+          r['status']='PASS' if c=='0' and s=='0' else ('FAIL' if c=='0' else 'ERROR')
+          (d/'result.json').write_text(json.dumps(r,indent=2))
+          PY
+          exit 0
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aegis-result-${{ inputs.job_id }}
+          path: web-results/
+          retention-days: 1
